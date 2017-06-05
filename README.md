@@ -4,6 +4,7 @@ UI property editors for a QObject or a QObjectList.
 
 * QObject editor is a column list of properties.
 * QObjectList editor is a table where rows are objects and columns are properties.
+    * Rows (objects) can be rearranged by dragging the row header with the mouse.
 * Default delegates for editing common value types:
     * bool: QCheckBox
     * QEnum: QComboBox
