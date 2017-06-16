@@ -8,6 +8,8 @@
 #ifndef __QtObjectPropertyEditor_H__
 #define __QtObjectPropertyEditor_H__
 
+#include <functional>
+
 #include <QAbstractItemModel>
 #include <QByteArray>
 #include <QHash>
@@ -96,7 +98,7 @@ namespace QtObjectPropertyEditor
         Q_OBJECT
         
     public:
-        typedef QObject* (*ObjectCreatorFuncPtr)();
+        typedef std::function<QObject*()> ObjectCreatorFunction;
         
         QtObjectListPropertyModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _parentOfObjects(0), _objectCreator(0) {}
         
@@ -105,7 +107,7 @@ namespace QtObjectPropertyEditor
         QList<QByteArray> propertyNames() const { return _propertyNames; }
         QHash<QByteArray, QString> propertyHeaders() const { return _propertyHeaders; }
         QObject* parentOfObjects() const { return _parentOfObjects; }
-        ObjectCreatorFuncPtr objectCreator() const { return _objectCreator; }
+        ObjectCreatorFunction objectCreator() const { return _objectCreator; }
         
         // Property setters.
         void setObjects(const QObjectList &objects) { beginResetModel(); _objects = objects; endResetModel(); }
@@ -114,7 +116,7 @@ namespace QtObjectPropertyEditor
         void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; endResetModel(); }
         void setPropertyHeaders(const QHash<QByteArray, QString> &headers) { beginResetModel(); _propertyHeaders = headers; endResetModel(); }
         void setParentOfObjects(QObject *parent) { _parentOfObjects = parent; }
-        void setObjectCreator(ObjectCreatorFuncPtr creator) { _objectCreator = creator; }
+        void setObjectCreator(ObjectCreatorFunction creator) { _objectCreator = creator; }
         
         // For convenience.
         template <class T>
@@ -142,7 +144,7 @@ namespace QtObjectPropertyEditor
         QList<QByteArray> _propertyNames;
         QHash<QByteArray, QString> _propertyHeaders;
         QObject *_parentOfObjects;
-        ObjectCreatorFuncPtr _objectCreator;
+        ObjectCreatorFunction _objectCreator;
     };
     
     template <class T>

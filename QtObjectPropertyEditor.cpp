@@ -298,7 +298,7 @@ namespace QtObjectPropertyEditor
             return false;
         beginInsertRows(parent, row, row + count - 1);
         for(int i = row; i < row + count; ++i) {
-            QObject *object = (*_objectCreator)();
+            QObject *object = _objectCreator();
             if(_parentOfObjects)
                 object->setParent(_parentOfObjects);
             _objects.insert(i, object);
