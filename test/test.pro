@@ -1,4 +1,4 @@
-# qmake -spec macx-xcode testQtObjectPropertyEditor.pro
+# e.g. for MACX, run: qmake -spec macx-xcode test.pro
 
 TARGET = test
 TEMPLATE = app
@@ -15,4 +15,4 @@ DEFINES += DEBUG
 INCLUDEPATH += ..
 HEADERS += ../QtObjectPropertyEditor.h
 SOURCES += ../QtObjectPropertyEditor.cpp
-SOURCES += testQtObjectPropertyEditor.cpp
+SOURCES += test.cpp

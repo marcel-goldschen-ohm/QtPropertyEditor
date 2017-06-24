@@ -9,5 +9,7 @@
 
 int main(int argc, char **argv)
 {
-    return QtObjectPropertyEditor::testQtObjectPropertyEditor(argc, argv);
+    QtObjectPropertyEditor::testQtObjectPropertyEditor(argc, argv);
+    QtObjectPropertyEditor::testQtObjectListPropertyEditor(argc, argv);
+    return 0;
 }
