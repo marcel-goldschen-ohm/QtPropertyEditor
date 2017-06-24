@@ -3,9 +3,9 @@
 UI property editors for a QObject or a QObjectList.
 
 * Editor for a single QObject is a column list of properties.
-    * <img src="images/QtObjectPropertyEditor.tiff" width="200" />
+    * <img src="images/QtObjectPropertyEditor.png" width="200" />
 * Editor for a list of QObjects is a table where rows are objects and columns are properties.
-    * <img src="images/QtObjectListPropertyEditor.tiff" width="600" />
+    * <img src="images/QtObjectListPropertyEditor.png" width="600" />
     * Rows (objects) can be rearranged by dragging the row header with the mouse.
     * Allows dynamic insertion/deletion of objects (rows) via a context menu obtainable by right clicking on the row headers (similar to Excel).
 * Default delegates for editing common value types (these are in addition to the default delegates already in Qt):
