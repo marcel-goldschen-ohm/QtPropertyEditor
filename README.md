@@ -2,11 +2,13 @@
 
 UI property editors for a QObject or a QObjectList.
 
-* QObject editor is a column list of properties.
-* QObjectList editor is a table where rows are objects and columns are properties.
+* Editor for a single QObject is a column list of properties.
+    * <img src="images/QtObjectPropertyEditor.tiff" width="200" />
+* Editor for a list of QObjects is a table where rows are objects and columns are properties.
+    * <img src="images/QtObjectListPropertyEditor.tiff" width="600" />
     * Rows (objects) can be rearranged by dragging the row header with the mouse.
-    * Allows dynamic insertion/deletion of objects (rows).
-* Default delegates for editing common value types:
+    * Allows dynamic insertion/deletion of objects (rows) via a context menu obtainable by right clicking on the row headers (similar to Excel).
+* Default delegates for editing common value types (these are in addition to the default delegates already in Qt):
     * bool: QCheckBox
     * QEnum: QComboBox
     * double: QLineEdit that can handle scientific notation
@@ -14,7 +16,7 @@ UI property editors for a QObject or a QObjectList.
     * QPoint/QPointF: QLineEdit for text format *(x, y)*
     * QRect/QRectF: QLineEdit for text format *[(x, y) w x h]*
 * Default is a flat editor for an object's properties excluding properties of child objects.
-* Specific child object properties can be made available in the editor via a *"path.to.child.property"* string. In this case, *path*, *to* and *child* are the object names of the child object tree, and *property* is a property name for *child*.
+    * Specific child object properties can be made available in the editor via a *"path.to.child.property"* string. In this case, *path*, *to* and *child* are the object names of the child object tree, and *property* is a property name for *child*.
 
 **Author**: Marcel Goldschen-Ohm  
 **Email**:  <marcel.goldschen@gmail.com>  
