@@ -12,6 +12,7 @@
 
 #include <QAbstractItemModel>
 #include <QByteArray>
+#include <QDialog>
 #include <QHash>
 #include <QList>
 #include <QMetaProperty>
@@ -21,6 +22,7 @@
 #include <QStyledItemDelegate>
 #include <QTableView>
 #include <QVariant>
+#include <QVBoxLayout>
 
 #ifdef DEBUG
 #include <iostream>
@@ -36,6 +38,9 @@ namespace QtObjectPropertyEditor
     
     // Handle descendant properties such as "child.grandchild.property".
     QObject* descendant(QObject *object, const QByteArray &pathToDescendantObject);
+    
+    // Get the size of a QTableView widget.
+    QSize getTableSize(QTableView *table);
     
     /* --------------------------------------------------------------------------------
      * Things that all QObject property models should be able to do.
@@ -186,9 +191,27 @@ namespace QtObjectPropertyEditor
         
     public:
         QtObjectPropertyEditor(QWidget *parent = 0);
+        
+        QSize sizeHint() { return getTableSize(this); }
     
     protected:
         QtObjectPropertyDelegate _delegate;
+    };
+    
+    /* --------------------------------------------------------------------------------
+     * Dialog for QtObjectPropertyEditor.
+     * -------------------------------------------------------------------------------- */
+    class QtObjectPropertyDialog : public QDialog
+    {
+        Q_OBJECT
+        
+    public:
+        QtObjectPropertyModel model;
+        
+        QtObjectPropertyDialog(QObject *object, QWidget *parent = 0);
+        
+    protected:
+        QtObjectPropertyEditor *_editor;
     };
     
     /* --------------------------------------------------------------------------------
@@ -200,6 +223,8 @@ namespace QtObjectPropertyEditor
         
     public:
         QtObjectListPropertyEditor(QWidget *parent = 0);
+        
+        QSize sizeHint() { return getTableSize(this); }
         
     public slots:
         void horizontalHeaderContextMenu(QPoint pos);

@@ -7,6 +7,7 @@
 
 #include <QApplication>
 #include <QComboBox>
+#include <QDialogButtonBox>
 #include <QEvent>
 #include <QHeaderView>
 #include <QLineEdit>
@@ -15,6 +16,7 @@
 #include <QMetaType>
 #include <QMouseEvent>
 #include <QRegularExpression>
+#include <QScrollBar>
 
 namespace QtObjectPropertyEditor
 {
@@ -53,6 +55,17 @@ namespace QtObjectPropertyEditor
             return object;
         }
         return object->findChild<QObject*>(QString(pathToDescendantObject));
+    }
+    
+    QSize getTableSize(QTableView *table)
+    {
+        int w = table->verticalHeader()->width() + 4; // +4 seems to be needed
+        int h = table->horizontalHeader()->height() + 4;
+        for(int i = 0; i < table->model()->columnCount(); i++)
+            w += table->columnWidth(i);
+        for(int i = 0; i < table->model()->rowCount(); i++)
+            h += table->rowHeight(i);
+        return QSize(w, h);
     }
     
     const QMetaProperty QtAbstractPropertyModel::metaPropertyAtIndex(const QModelIndex &index) const
@@ -699,6 +712,39 @@ namespace QtObjectPropertyEditor
         setItemDelegate(&_delegate);
         setAlternatingRowColors(true);
         verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    }
+    
+    QtObjectPropertyDialog::QtObjectPropertyDialog(QObject *object, QWidget *parent) : QDialog(parent)
+    {
+        model.setObject(object);
+        
+        _editor = new QtObjectPropertyEditor::QtObjectPropertyEditor();
+        _editor->setModel(&model);
+        _editor->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        _editor->horizontalHeader()->hide();
+        
+        QVBoxLayout *layout = new QVBoxLayout(this);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(0);
+        layout->setMargin(0);
+        layout->addWidget(_editor);
+        
+        QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Close);
+        connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        buttonBox->setCenterButtons(true);
+        layout->addWidget(buttonBox);
+        
+        show();
+        int w = _editor->columnWidth(0);
+        _editor->resizeColumnToContents(0);
+        if(_editor->columnWidth(0) < w)
+            _editor->setColumnWidth(0, w);
+        QSize sz = getTableSize(_editor);
+        setMinimumWidth(sz.width());
+        setMaximumHeight(sz.height() + buttonBox->height());
+        resize(sz.width(), height());
+        hide();
     }
     
     QtObjectListPropertyEditor::QtObjectListPropertyEditor(QWidget *parent) :
