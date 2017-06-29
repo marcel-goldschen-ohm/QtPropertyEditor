@@ -13,6 +13,7 @@
 #include <QAbstractItemModel>
 #include <QByteArray>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QHash>
 #include <QList>
 #include <QMetaProperty>
@@ -210,8 +211,12 @@ namespace QtObjectPropertyEditor
         
         QtObjectPropertyDialog(QObject *object, QWidget *parent = 0);
         
+    public slots:
+        void initSize();
+        
     protected:
         QtObjectPropertyEditor *_editor;
+        QDialogButtonBox *_buttonBox;
     };
     
     /* --------------------------------------------------------------------------------

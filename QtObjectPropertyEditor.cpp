@@ -7,7 +7,6 @@
 
 #include <QApplication>
 #include <QComboBox>
-#include <QDialogButtonBox>
 #include <QEvent>
 #include <QHeaderView>
 #include <QLineEdit>
@@ -309,6 +308,7 @@ namespace QtObjectPropertyEditor
         // Only valid if we have an object creator method.
         if(!_objectCreator)
             return false;
+        bool columnCountWillAlsoChange = _objects.isEmpty() && _propertyNames.isEmpty();
         beginInsertRows(parent, row, row + count - 1);
         for(int i = row; i < row + count; ++i) {
             QObject *object = _objectCreator();
@@ -319,6 +319,10 @@ namespace QtObjectPropertyEditor
         endInsertRows();
         if(row + count < _objects.size())
             reorderChildObjectsToMatchRowOrder(row + count);
+        if(columnCountWillAlsoChange) {
+            beginResetModel();
+            endResetModel();
+        }
         emit rowCountChanged();
         return true;
     }
@@ -729,22 +733,27 @@ namespace QtObjectPropertyEditor
         layout->setMargin(0);
         layout->addWidget(_editor);
         
-        QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Close);
-        connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-        connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        buttonBox->setCenterButtons(true);
-        layout->addWidget(buttonBox);
+        _buttonBox = new QDialogButtonBox(QDialogButtonBox::Close);
+        connect(_buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        connect(_buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        _buttonBox->setCenterButtons(true);
+        layout->addWidget(_buttonBox);
         
         show();
+        initSize();
+        hide();
+    }
+    
+    void QtObjectPropertyDialog::initSize()
+    {
         int w = _editor->columnWidth(0);
         _editor->resizeColumnToContents(0);
         if(_editor->columnWidth(0) < w)
             _editor->setColumnWidth(0, w);
         QSize sz = getTableSize(_editor);
         setMinimumWidth(sz.width());
-        setMaximumHeight(sz.height() + buttonBox->height());
+        setMaximumHeight(sz.height() + _buttonBox->height());
         resize(sz.width(), height());
-        hide();
     }
     
     QtObjectListPropertyEditor::QtObjectListPropertyEditor(QWidget *parent) :
