@@ -22,6 +22,7 @@
 #include <QStringList>
 #include <QStyledItemDelegate>
 #include <QTableView>
+#include <QTreeView>
 #include <QVariant>
 #include <QVBoxLayout>
 
@@ -56,9 +57,9 @@ namespace QtObjectPropertyEditor
         virtual QObject* objectAtIndex(const QModelIndex &index) const = 0;
         virtual QByteArray propertyNameAtIndex(const QModelIndex &index) const = 0;
         const QMetaProperty metaPropertyAtIndex(const QModelIndex &index) const;
-        QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
-        bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole);
-        Qt::ItemFlags flags(const QModelIndex &index) const;
+        virtual QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
+        virtual bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole);
+        virtual Qt::ItemFlags flags(const QModelIndex &index) const;
     };
     
     /* --------------------------------------------------------------------------------
@@ -77,7 +78,7 @@ namespace QtObjectPropertyEditor
         QHash<QByteArray, QString> propertyHeaders() const { return _propertyHeaders; }
         
         // Property setters.
-        void setObject(QObject *obj) { beginResetModel(); _object = obj; endResetModel(); }
+        void setObject(QObject *object) { beginResetModel(); _object = object; endResetModel(); }
         void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; endResetModel(); }
         void setPropertyHeaders(const QHash<QByteArray, QString> &headers) { beginResetModel(); _propertyHeaders = headers; endResetModel(); }
         
@@ -163,6 +164,60 @@ namespace QtObjectPropertyEditor
     }
     
     /* --------------------------------------------------------------------------------
+     * Property model for an entire QObject tree.
+     * -------------------------------------------------------------------------------- */
+    struct ObjectPropertyTreeNode
+    {
+        // Node traversal.
+        ObjectPropertyTreeNode *parent;
+        QList<ObjectPropertyTreeNode*> children;
+        
+        // Node data.
+        QObject *object;
+        QByteArray propertyName;
+        
+        ObjectPropertyTreeNode(ObjectPropertyTreeNode *parent = 0) : parent(parent), object(0) {}
+        ~ObjectPropertyTreeNode() { qDeleteAll(children); }
+        
+        void setObject(QObject *object, int maxChildDepth = -1, const QList<QByteArray> &propertyNames = QList<QByteArray>());
+    };
+    
+    class QtObjectTreePropertyModel : public QtAbstractPropertyModel
+    {
+        Q_OBJECT
+        
+    public:
+        QtObjectTreePropertyModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _root(0) {}
+        
+        // Property getters.
+        QObject* object() const { return _root.object; }
+        QList<QByteArray> propertyNames() const { return _propertyNames; }
+        QHash<QByteArray, QString> propertyHeaders() const { return _propertyHeaders; }
+        
+        // Property setters.
+        void setObject(QObject *object, int maxChildDepth = -1);
+        void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; endResetModel(); }
+        void setPropertyHeaders(const QHash<QByteArray, QString> &headers) { beginResetModel(); _propertyHeaders = headers; endResetModel(); }
+        
+        // Model interface.
+        ObjectPropertyTreeNode* nodeAtIndex(const QModelIndex &index) const;
+        QObject* objectAtIndex(const QModelIndex &index) const;
+        QByteArray propertyNameAtIndex(const QModelIndex &index) const;
+        QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const;
+        QModelIndex parent(const QModelIndex &index) const;
+        int rowCount(const QModelIndex &parent = QModelIndex()) const;
+        int columnCount(const QModelIndex &parent = QModelIndex()) const;
+        QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
+        bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole);
+        Qt::ItemFlags flags(const QModelIndex &index) const;
+        QVariant headerData(int section, Qt::Orientation orientation, int role) const;
+    protected:
+        ObjectPropertyTreeNode _root;
+        QList<QByteArray> _propertyNames;
+        QHash<QByteArray, QString> _propertyHeaders;
+    };
+    
+    /* --------------------------------------------------------------------------------
      * Property editor delegate.
      * -------------------------------------------------------------------------------- */
     class QtObjectPropertyDelegate: public QStyledItemDelegate
@@ -220,6 +275,20 @@ namespace QtObjectPropertyEditor
         QtObjectPropertyDelegate _delegate;
         
         void keyPressEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
+    };
+    
+    /* --------------------------------------------------------------------------------
+     * Editor for properties in an entire QObject tree.
+     * -------------------------------------------------------------------------------- */
+    class QtObjectTreePropertyEditor : public QTreeView
+    {
+        Q_OBJECT
+        
+    public:
+        QtObjectTreePropertyEditor(QWidget *parent = 0);
+        
+    protected:
+        QtObjectPropertyDelegate _delegate;
     };
     
     /* --------------------------------------------------------------------------------
@@ -339,6 +408,7 @@ namespace QtObjectPropertyEditor
      * -------------------------------------------------------------------------------- */
     int testQtObjectPropertyEditor(int argc, char **argv);
     int testQtObjectListPropertyEditor(int argc, char **argv);
+    int testQtObjectTreePropertyEditor(int argc, char **argv);
     
 #endif // DEBUG
     

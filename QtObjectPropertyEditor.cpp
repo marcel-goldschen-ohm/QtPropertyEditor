@@ -90,7 +90,7 @@ namespace QtObjectPropertyEditor
     {
         if(!index.isValid())
             return QVariant();
-        if (role == Qt::DisplayRole || role == Qt::EditRole) {
+        if(role == Qt::DisplayRole || role == Qt::EditRole) {
             QObject *object = objectAtIndex(index);
             if(!object)
                 return QVariant();
@@ -396,6 +396,222 @@ namespace QtObjectPropertyEditor
                 }
             }
         }
+    }
+    
+    void ObjectPropertyTreeNode::setObject(QObject *object, int maxChildDepth, const QList<QByteArray> &propertyNames)
+    {
+        this->object = object;
+        propertyName.clear();
+        qDeleteAll(children);
+        children.clear();
+        if(!object) return;
+        
+        // Compiled properties (but exclude objectName as this is displayed for the object node itself).
+        const QMetaObject *metaObject = object->metaObject();
+        int numProperties = metaObject->propertyCount();
+        for(int i = 0; i < numProperties; ++i) {
+            const QMetaProperty metaProperty = metaObject->property(i);
+            QByteArray propertyName = QByteArray(metaProperty.name());
+            if(propertyNames.isEmpty() || propertyNames.contains(propertyName)) {
+                ObjectPropertyTreeNode *node = new ObjectPropertyTreeNode(this);
+                node->propertyName = propertyName;
+                children.append(node);
+            }
+        }
+        // Dynamic properties.
+        QList<QByteArray> dynamicPropertyNames = object->dynamicPropertyNames();
+        foreach(const QByteArray &propertyName, dynamicPropertyNames) {
+            if(propertyNames.isEmpty() || propertyNames.contains(propertyName)) {
+                ObjectPropertyTreeNode *node = new ObjectPropertyTreeNode(this);
+                node->propertyName = propertyName;
+                children.append(node);
+            }
+        }
+        // Child objects.
+        if(maxChildDepth > 0 || maxChildDepth == -1) {
+            if(maxChildDepth > 0)
+                --maxChildDepth;
+            QMap<QByteArray, QObjectList> childMap;
+            foreach(QObject *child, object->children()) {
+                childMap[QByteArray(child->metaObject()->className())].append(child);
+            }
+            for(auto it = childMap.begin(); it != childMap.end(); ++it) {
+                foreach(QObject *child, it.value()) {
+                    ObjectPropertyTreeNode *node = new ObjectPropertyTreeNode(this);
+                    node->setObject(child, maxChildDepth, propertyNames);
+                    children.append(node);
+                }
+            }
+        }
+    }
+    
+    void QtObjectTreePropertyModel::setObject(QObject *object, int maxChildDepth)
+    {
+        beginResetModel();
+        _root.setObject(object, maxChildDepth, _propertyNames);
+        endResetModel();
+    }
+    
+    ObjectPropertyTreeNode* QtObjectTreePropertyModel::nodeAtIndex(const QModelIndex &index) const
+    {
+        try {
+            return static_cast<ObjectPropertyTreeNode*>(index.internalPointer());
+        } catch(...) {
+            return 0;
+        }
+    }
+    
+    QObject* QtObjectTreePropertyModel::objectAtIndex(const QModelIndex &index) const
+    {
+        // If node is an object, return the node's object.
+        // Else if node is a property, return the parent node's object.
+        ObjectPropertyTreeNode *node = nodeAtIndex(index);
+        if(!node) return 0;
+        if(node->object) return node->object;
+        if(node->parent) return node->parent->object;
+        return 0;
+    }
+    
+    QByteArray QtObjectTreePropertyModel::propertyNameAtIndex(const QModelIndex &index) const
+    {
+        // If node is a property, return the node's property name.
+        // Else if node is an object, return "objectName".
+        ObjectPropertyTreeNode *node = nodeAtIndex(index);
+        if(!node) return QByteArray();
+        if(!node->propertyName.isEmpty()) return node->propertyName;
+        return QByteArray();
+    }
+    
+    QModelIndex QtObjectTreePropertyModel::index(int row, int column, const QModelIndex &parent) const
+    {
+        // Return a model index whose internal pointer references the appropriate tree node.
+        if(column < 0 || column >= 2 || !hasIndex(row, column, parent))
+            return QModelIndex();
+        const ObjectPropertyTreeNode *parentNode = parent.isValid() ? nodeAtIndex(parent) : &_root;
+        if(!parentNode || row < 0 || row >= parentNode->children.size())
+            return QModelIndex();
+        ObjectPropertyTreeNode *node = parentNode->children.at(row);
+        return node ? createIndex(row, column, node) : QModelIndex();
+    }
+    
+    QModelIndex QtObjectTreePropertyModel::parent(const QModelIndex &index) const
+    {
+        // Return a model index for parent node (column must be 0).
+        if(!index.isValid())
+            return QModelIndex();
+        ObjectPropertyTreeNode *node = nodeAtIndex(index);
+        if(!node)
+            return QModelIndex();
+        ObjectPropertyTreeNode *parentNode = node->parent;
+        if(!parentNode || parentNode == &_root)
+            return QModelIndex();
+        int row = 0;
+        ObjectPropertyTreeNode *grandparentNode = parentNode->parent;
+        if(grandparentNode)
+            row = grandparentNode->children.indexOf(parentNode);
+        return createIndex(row, 0, parentNode);
+    }
+    
+    int QtObjectTreePropertyModel::rowCount(const QModelIndex &parent) const
+    {
+        // Return number of child nodes.
+        const ObjectPropertyTreeNode *parentNode = parent.isValid() ? nodeAtIndex(parent) : &_root;
+        return parentNode ? parentNode->children.size() : 0;
+    }
+    
+    int QtObjectTreePropertyModel::columnCount(const QModelIndex &parent) const
+    {
+        // Return 2 for name/value columns.
+        const ObjectPropertyTreeNode *parentNode = parent.isValid() ? nodeAtIndex(parent) : &_root;
+        return (parentNode ? 2 : 0);
+    }
+    
+    QVariant QtObjectTreePropertyModel::data(const QModelIndex &index, int role) const
+    {
+        if(!index.isValid())
+            return QVariant();
+        if(role == Qt::DisplayRole || role == Qt::EditRole) {
+            QObject *object = objectAtIndex(index);
+            if(!object)
+                return QVariant();
+            QByteArray propertyName = propertyNameAtIndex(index);
+            if(index.column() == 0) {
+                // Object's class name or else the property name.
+                if(propertyName.isEmpty())
+                    return QVariant(object->metaObject()->className());
+                else
+                    return QVariant(propertyName);
+            } else if(index.column() == 1) {
+                // Object's objectName or else the property value.
+                if(propertyName.isEmpty())
+                    return QVariant(object->objectName());
+                else
+                    return object->property(propertyName.constData());
+            }
+        }
+        return QVariant();
+    }
+    
+    bool QtObjectTreePropertyModel::setData(const QModelIndex &index, const QVariant &value, int role)
+    {
+        if(!index.isValid())
+            return false;
+        if(role == Qt::EditRole) {
+            QObject *object = objectAtIndex(index);
+            if(!object)
+                return false;
+            QByteArray propertyName = propertyNameAtIndex(index);
+            if(index.column() == 0) {
+                // Object class name or property name.
+                return false;
+            } else if(index.column() == 1) {
+                // Object's objectName or else the property value.
+                if(propertyName.isEmpty()) {
+                    object->setObjectName(value.toString());
+                    return true;
+                } else {
+                    bool result = object->setProperty(propertyName.constData(), value);
+                    // Result will be FALSE for dynamic properties, which causes the tree view to lag.
+                    // So make sure we still return TRUE in this case.
+                    if(!result && object->dynamicPropertyNames().contains(propertyName))
+                        return true;
+                    return result;
+                }
+            }
+        }
+        return false;
+    }
+    
+    Qt::ItemFlags QtObjectTreePropertyModel::flags(const QModelIndex &index) const
+    {
+        Qt::ItemFlags flags = QAbstractItemModel::flags(index);
+        if(!index.isValid())
+            return flags;
+        QObject *object = objectAtIndex(index);
+        if(!object)
+            return flags;
+        flags |= Qt::ItemIsEnabled;
+        flags |= Qt::ItemIsSelectable;
+        if(index.column() == 1) {
+            QByteArray propertyName = propertyNameAtIndex(index);
+            const QMetaProperty metaProperty = metaPropertyAtIndex(index);
+            if(metaProperty.isWritable() || object->dynamicPropertyNames().contains(propertyName))
+                flags |= Qt::ItemIsEditable;
+        }
+        return flags;
+    }
+    
+    QVariant QtObjectTreePropertyModel::headerData(int section, Qt::Orientation orientation, int role) const
+    {
+        if(role == Qt::DisplayRole) {
+            if(orientation == Qt::Horizontal) {
+                if(section == 0)
+                    return QVariant("Name");
+                else if(section == 1)
+                    return QVariant("Value");
+            }
+        }
+        return QVariant();
     }
 
     QWidget* QtObjectPropertyDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const
@@ -832,6 +1048,13 @@ namespace QtObjectPropertyEditor
             appendRow();
     }
     
+    QtObjectTreePropertyEditor::QtObjectTreePropertyEditor(QWidget *parent) :
+    QTreeView(parent)
+    {
+        setItemDelegate(&_delegate);
+        setAlternatingRowColors(true);
+    }
+    
     QtObjectPropertyDialog::QtObjectPropertyDialog(QObject *object, QWidget *parent) : QDialog(parent)
     {
         model.setObject(object);
@@ -944,8 +1167,38 @@ namespace QtObjectPropertyEditor
         int status = app.exec();
         
         // Check child object order.
-        foreach(QObject *object, parent.findChildren<QObject*>())
+        foreach(QObject *object, parent.findChildren<QObject*>(QString(), Qt::FindDirectChildrenOnly))
             qDebug() << object->objectName();
+        
+        return status;
+    }
+    
+    int testQtObjectTreePropertyEditor(int argc, char **argv)
+    {
+        QApplication app(argc, argv);
+        
+        // Object.
+        TestObject object("My Obj");
+        
+        // Dynamic properties.
+        object.setProperty("myDynamicBool", false);
+        object.setProperty("myDynamicInt", 3);
+        object.setProperty("myDynamicDouble", 3.0);
+        object.setProperty("myDynamicString", "3 amigos");
+        object.setProperty("myDynamicDateTime", QDateTime::currentDateTime());
+        
+        // Model.
+        QtObjectTreePropertyModel model;
+        model.setObject(&object);
+        
+        // Editor UI.
+        QtObjectTreePropertyEditor editor;
+        editor.setModel(&model);
+        editor.show();
+        
+        int status = app.exec();
+        
+        object.dumpObjectInfo();
         
         return status;
     }

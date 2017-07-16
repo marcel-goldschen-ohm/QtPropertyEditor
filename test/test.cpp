@@ -11,5 +11,6 @@ int main(int argc, char **argv)
 {
     QtObjectPropertyEditor::testQtObjectPropertyEditor(argc, argv);
     QtObjectPropertyEditor::testQtObjectListPropertyEditor(argc, argv);
+    QtObjectPropertyEditor::testQtObjectTreePropertyEditor(argc, argv);
     return 0;
 }
