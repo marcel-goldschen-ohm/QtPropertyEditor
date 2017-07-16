@@ -124,11 +124,23 @@ QtObjectPropertyEditor::QtObjectListPropertyModel model;
 model.setObjects(objects);
 ```
 
-**[Optional]** For dynamic object insertion in the list, you need to supply an object creator function of type QtObjectListPropertyModel::ObjectCreatorFunction. For convenience, QtObjectListPropertyModel defines defaultObjectCreator() templated on the derived type, but you are free to use your own creator function as well. Furthermore, if you want the newly created objects to be children of a particular parent object, you need to tell the model about the parent.
+**[Optional]** For dynamic object insertion in the list, you need to supply an object creator function of type `QtObjectListPropertyModel::ObjectCreatorFunction` which is a typedef for `std::function<QObject*()>`. For convenience, QtObjectListPropertyModel defines defaultObjectCreator() templated on the derived type, but you are free to use your own creator function as well. **If you want the newly created objects to be children of a particular parent object, you need to wrap this into the creator function. For example, as shown below.**
     
 ```cpp
-model.setObjectCreator(QtObjectListPropertyModel::defaultObjectCreator<TestObject>);
-model.setParentOfObjects(&parent);
+// The creator function.
+QObject* createNewTestObject(QObject *parent)
+{
+    return new QtObjectPropertyEditor::TestObject(
+        "New Test Object", parent);
+}
+```
+    
+```cpp
+// This will make sure all newly inserted objects
+// in the model are children of parent.
+std::function<QObject*()> func = 
+    std::bind(createNewTestObject, &parent);
+model.setObjectCreator(func);
 ```
 
 **[Optional]** Exposed properties and their column headers can be specified exactly the same as shown in the example above for the editor of a single QObject.

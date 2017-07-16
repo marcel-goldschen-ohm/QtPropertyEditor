@@ -56,7 +56,7 @@ namespace QtObjectPropertyEditor
         return object->findChild<QObject*>(QString(pathToDescendantObject));
     }
     
-    QSize getTableSize(QTableView *table)
+    QSize getTableSize(const QTableView *table)
     {
         int w = table->verticalHeader()->width() + 4; // +4 seems to be needed
         int h = table->horizontalHeader()->height() + 4;
@@ -216,9 +216,17 @@ namespace QtObjectPropertyEditor
         if(role == Qt::DisplayRole) {
             if(orientation == Qt::Vertical) {
                 QByteArray propertyName = propertyNameAtIndex(createIndex(section, 0));
+                QByteArray childPath;
+                if(_propertyNames.size() > section) {
+                    QByteArray pathToPropertyName = _propertyNames.at(section);
+                    if(pathToPropertyName.contains('.')) {
+                        int pos = pathToPropertyName.lastIndexOf('.');
+                        childPath = pathToPropertyName.left(pos + 1);
+                    }
+                }
                 if(_propertyHeaders.contains(propertyName))
-                    return QVariant(_propertyHeaders.value(propertyName));
-                return QVariant(propertyName);
+                    return QVariant(childPath + _propertyHeaders.value(propertyName));
+                return QVariant(childPath + propertyName);
             } else if(orientation == Qt::Horizontal) {
                 if(section == 0)
                     return QVariant();
@@ -229,7 +237,20 @@ namespace QtObjectPropertyEditor
     
     QObject* QtObjectListPropertyModel::objectAtIndex(const QModelIndex &index) const
     {
-        return _objects.size() > index.row() ? _objects.at(index.row()) : 0;
+        if(_objects.size() <= index.row())
+            return 0;
+        QObject *object = _objects.at(index.row());
+        // If property names are specified, check if name at column is a path to a child object property.
+        if(!_propertyNames.isEmpty()) {
+            if(_propertyNames.size() > index.column()) {
+                QByteArray propertyName = _propertyNames.at(index.column());
+                if(propertyName.contains('.')) {
+                    int pos = propertyName.lastIndexOf('.');
+                    return descendant(object, propertyName.left(pos));
+                }
+            }
+        }
+        return object;
     }
     
     QByteArray QtObjectListPropertyModel::propertyNameAtIndex(const QModelIndex &index) const
@@ -295,9 +316,17 @@ namespace QtObjectPropertyEditor
                 return QVariant(section);
             } else if(orientation == Qt::Horizontal) {
                 QByteArray propertyName = propertyNameAtIndex(createIndex(0, section));
+                QByteArray childPath;
+                if(_propertyNames.size() > section) {
+                    QByteArray pathToPropertyName = _propertyNames.at(section);
+                    if(pathToPropertyName.contains('.')) {
+                        int pos = pathToPropertyName.lastIndexOf('.');
+                        childPath = pathToPropertyName.left(pos + 1);
+                    }
+                }
                 if(_propertyHeaders.contains(propertyName))
-                    return QVariant(_propertyHeaders.value(propertyName));
-                return QVariant(propertyName);
+                    return QVariant(childPath + _propertyHeaders.value(propertyName));
+                return QVariant(childPath + propertyName);
             }
         }
         return QVariant();
@@ -312,8 +341,6 @@ namespace QtObjectPropertyEditor
         beginInsertRows(parent, row, row + count - 1);
         for(int i = row; i < row + count; ++i) {
             QObject *object = _objectCreator();
-            if(_parentOfObjects)
-                object->setParent(_parentOfObjects);
             _objects.insert(i, object);
         }
         endInsertRows();
@@ -718,44 +745,6 @@ namespace QtObjectPropertyEditor
         verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     }
     
-    QtObjectPropertyDialog::QtObjectPropertyDialog(QObject *object, QWidget *parent) : QDialog(parent)
-    {
-        model.setObject(object);
-        
-        _editor = new QtObjectPropertyEditor::QtObjectPropertyEditor();
-        _editor->setModel(&model);
-        _editor->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-        _editor->horizontalHeader()->hide();
-        
-        QVBoxLayout *layout = new QVBoxLayout(this);
-        layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(0);
-        layout->setMargin(0);
-        layout->addWidget(_editor);
-        
-        _buttonBox = new QDialogButtonBox(QDialogButtonBox::Close);
-        connect(_buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-        connect(_buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        _buttonBox->setCenterButtons(true);
-        layout->addWidget(_buttonBox);
-        
-        show();
-        initSize();
-        hide();
-    }
-    
-    void QtObjectPropertyDialog::initSize()
-    {
-        int w = _editor->columnWidth(0);
-        _editor->resizeColumnToContents(0);
-        if(_editor->columnWidth(0) < w)
-            _editor->setColumnWidth(0, w);
-        QSize sz = getTableSize(_editor);
-        setMinimumWidth(sz.width());
-        setMaximumHeight(sz.height() + _buttonBox->height());
-        resize(sz.width(), height());
-    }
-    
     QtObjectListPropertyEditor::QtObjectListPropertyEditor(QWidget *parent) :
     QTableView(parent)
     {
@@ -843,6 +832,31 @@ namespace QtObjectPropertyEditor
             appendRow();
     }
     
+    QtObjectPropertyDialog::QtObjectPropertyDialog(QObject *object, QWidget *parent) : QDialog(parent)
+    {
+        model.setObject(object);
+        
+        _editor = new QtObjectPropertyEditor::QtObjectPropertyEditor();
+        _editor->setModel(&model);
+        _editor->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        _editor->horizontalHeader()->hide();
+        
+        QVBoxLayout *layout = new QVBoxLayout(this);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(0);
+        layout->setMargin(0);
+        layout->addWidget(_editor);
+        
+        _buttonBox = new QDialogButtonBox(QDialogButtonBox::Close);
+        connect(_buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        connect(_buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        _buttonBox->setCenterButtons(true);
+        layout->addWidget(_buttonBox);
+        
+        _editor->resizeColumnToContents(0);
+        _editor->setColumnWidth(0, _editor->columnWidth(0) + 100);
+    }
+    
 #ifdef DEBUG
     
     int testQtObjectPropertyEditor(int argc, char **argv)
@@ -863,6 +877,11 @@ namespace QtObjectPropertyEditor
         QtObjectPropertyModel model;
         model.setObject(&object);
         
+        // Property names.
+        QList<QByteArray> propertyNames = getObjectPropertyNames(&object);
+        propertyNames.append("child.myInt");
+        model.setPropertyNames(propertyNames);
+        
         // Property headers.
         QHash<QByteArray, QString> propertyHeaders;
         propertyHeaders["objectName"] = "Name";
@@ -874,10 +893,14 @@ namespace QtObjectPropertyEditor
         editor.show();
         editor.resizeColumnsToContents();
         
-        return app.exec();
+        int status = app.exec();
+        
+        object.dumpObjectInfo();
+        
+        return status;
     }
     
-    //QObject* newTestObject() { return new TestObject(); }
+    QObject* newTestObject(QObject *parent) { return new TestObject("", parent); }
     
     int testQtObjectListPropertyEditor(int argc, char **argv)
     {
@@ -900,8 +923,12 @@ namespace QtObjectPropertyEditor
         // Model.
         QtObjectListPropertyModel model;
         model.setObjects(objects);
-        model.setParentOfObjects(&parent);
-        model.setObjectCreator(QtObjectListPropertyModel::defaultObjectCreator<TestObject>);
+        model.setObjectCreator(std::bind(newTestObject, &parent));
+        
+        // Property names.
+        QList<QByteArray> propertyNames = getMetaObjectPropertyNames(TestObject::staticMetaObject);
+        propertyNames.append("child.myInt");
+        model.setPropertyNames(propertyNames);
         
         // Property headers.
         QHash<QByteArray, QString> propertyHeaders;

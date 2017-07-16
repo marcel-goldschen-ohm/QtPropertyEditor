@@ -41,7 +41,7 @@ namespace QtObjectPropertyEditor
     QObject* descendant(QObject *object, const QByteArray &pathToDescendantObject);
     
     // Get the size of a QTableView widget.
-    QSize getTableSize(QTableView *table);
+    QSize getTableSize(const QTableView *table);
     
     /* --------------------------------------------------------------------------------
      * Things that all QObject property models should be able to do.
@@ -106,13 +106,12 @@ namespace QtObjectPropertyEditor
     public:
         typedef std::function<QObject*()> ObjectCreatorFunction;
         
-        QtObjectListPropertyModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _parentOfObjects(0), _objectCreator(0) {}
+        QtObjectListPropertyModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _objectCreator(0) {}
         
         // Property getters.
         QObjectList objects() const { return _objects; }
         QList<QByteArray> propertyNames() const { return _propertyNames; }
         QHash<QByteArray, QString> propertyHeaders() const { return _propertyHeaders; }
-        QObject* parentOfObjects() const { return _parentOfObjects; }
         ObjectCreatorFunction objectCreator() const { return _objectCreator; }
         
         // Property setters.
@@ -121,7 +120,6 @@ namespace QtObjectPropertyEditor
         void setObjects(const QList<T*> &objects);
         void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; endResetModel(); }
         void setPropertyHeaders(const QHash<QByteArray, QString> &headers) { beginResetModel(); _propertyHeaders = headers; endResetModel(); }
-        void setParentOfObjects(QObject *parent) { _parentOfObjects = parent; }
         void setObjectCreator(ObjectCreatorFunction creator) { _objectCreator = creator; }
         
         // For convenience.
@@ -149,7 +147,6 @@ namespace QtObjectPropertyEditor
         QObjectList _objects;
         QList<QByteArray> _propertyNames;
         QHash<QByteArray, QString> _propertyHeaders;
-        QObject *_parentOfObjects;
         ObjectCreatorFunction _objectCreator;
     };
     
@@ -193,10 +190,36 @@ namespace QtObjectPropertyEditor
     public:
         QtObjectPropertyEditor(QWidget *parent = 0);
         
-        QSize sizeHint() { return getTableSize(this); }
+        QSize sizeHint() const Q_DECL_OVERRIDE { return getTableSize(this); }
     
     protected:
         QtObjectPropertyDelegate _delegate;
+    };
+    
+    /* --------------------------------------------------------------------------------
+     * Editor for properties in a list of QObjects.
+     * -------------------------------------------------------------------------------- */
+    class QtObjectListPropertyEditor : public QTableView
+    {
+        Q_OBJECT
+        
+    public:
+        QtObjectListPropertyEditor(QWidget *parent = 0);
+        
+        QSize sizeHint() const Q_DECL_OVERRIDE { return getTableSize(this); }
+        
+    public slots:
+        void horizontalHeaderContextMenu(QPoint pos);
+        void verticalHeaderContextMenu(QPoint pos);
+        void appendRow();
+        void insertSelectedRows();
+        void removeSelectedRows();
+        void handleSectionMove(int logicalIndex, int oldVisualIndex, int newVisualIndex);
+        
+    protected:
+        QtObjectPropertyDelegate _delegate;
+        
+        void keyPressEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
     };
     
     /* --------------------------------------------------------------------------------
@@ -211,38 +234,9 @@ namespace QtObjectPropertyEditor
         
         QtObjectPropertyDialog(QObject *object, QWidget *parent = 0);
         
-    public slots:
-        void initSize();
-        
     protected:
         QtObjectPropertyEditor *_editor;
         QDialogButtonBox *_buttonBox;
-    };
-    
-    /* --------------------------------------------------------------------------------
-     * Editor for properties in a list of QObjects.
-     * -------------------------------------------------------------------------------- */
-    class QtObjectListPropertyEditor : public QTableView
-    {
-        Q_OBJECT
-        
-    public:
-        QtObjectListPropertyEditor(QWidget *parent = 0);
-        
-        QSize sizeHint() { return getTableSize(this); }
-        
-    public slots:
-        void horizontalHeaderContextMenu(QPoint pos);
-        void verticalHeaderContextMenu(QPoint pos);
-        void appendRow();
-        void insertSelectedRows();
-        void removeSelectedRows();
-        void handleSectionMove(int logicalIndex, int oldVisualIndex, int newVisualIndex);
-        
-    protected:
-        QtObjectPropertyDelegate _delegate;
-        
-        void keyPressEvent(QKeyEvent *event);
     };
     
 #ifdef DEBUG
@@ -280,23 +274,12 @@ namespace QtObjectPropertyEditor
         Q_ENUMS(MyEnum)
         
         // Init.
-        TestObject(const QString &name = "", QObject *parent = 0) :
-        QObject(parent),
-        _myEnum(B),
-        _myBool(true),
-        _myInt(82),
-        _myFloat(3.14),
-        _myDouble(3.14e-12),
-        _myString("Hi-ya!"),
-        _myDateTime(QDateTime::currentDateTime()),
-        _mySize(2, 4),
-        _mySizeF(3.1, 4.9),
-        _myPoint(0, 1),
-        _myPointF(0.05, 1.03),
-        _myRect(0, 0, 3, 3),
-        _myRectF(0.5, 0.5, 1.3, 3.1)
+        TestObject(const QString &name = "", QObject *parent = 0, bool hasChild = true) : QObject(parent), _myEnum(B), _myBool(true), _myInt(82), _myFloat(3.14), _myDouble(3.14e-12), _myString("Hi-ya!"), _myDateTime(QDateTime::currentDateTime()), _mySize(2, 4), _mySizeF(3.1, 4.9), _myPoint(0, 1), _myPointF(0.05, 1.03), _myRect(0, 0, 3, 3), _myRectF(0.5, 0.5, 1.3, 3.1)
         {
             setObjectName(name);
+            // Child object.
+            if(hasChild)
+                new TestObject("child", this, false);
         }
         
         // Property getters.
