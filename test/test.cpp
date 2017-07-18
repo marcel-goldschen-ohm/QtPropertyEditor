@@ -5,12 +5,11 @@
  * Email: marcel.goldschen@gmail.com
  * -------------------------------------------------------------------------------- */
 
-#include "QtObjectPropertyEditor.h"
+#include "QtPropertyEditor.h"
 
 int main(int argc, char **argv)
 {
-    QtObjectPropertyEditor::testQtObjectPropertyEditor(argc, argv);
-    QtObjectPropertyEditor::testQtObjectListPropertyEditor(argc, argv);
-    QtObjectPropertyEditor::testQtObjectTreePropertyEditor(argc, argv);
+    QtPropertyEditor::testQtPropertyTreeEditor(argc, argv);
+    QtPropertyEditor::testQtPropertyTableEditor(argc, argv);
     return 0;
 }

@@ -13,6 +13,6 @@ UI_DIR = Debug/.ui
 DEFINES += DEBUG
 
 INCLUDEPATH += ..
-HEADERS += ../QtObjectPropertyEditor.h
-SOURCES += ../QtObjectPropertyEditor.cpp
+HEADERS += ../QtPropertyEditor.h
+SOURCES += ../QtPropertyEditor.cpp
 SOURCES += test.cpp

@@ -3,7 +3,7 @@
  * Email: marcel.goldschen@gmail.com
  * -------------------------------------------------------------------------------- */
 
-#include "QtObjectPropertyEditor.h"
+#include "QtPropertyEditor.h"
 
 #include <QApplication>
 #include <QComboBox>
@@ -17,7 +17,7 @@
 #include <QRegularExpression>
 #include <QScrollBar>
 
-namespace QtObjectPropertyEditor
+namespace QtPropertyEditor
 {
     QList<QByteArray> getObjectPropertyNames(QObject *object)
     {
@@ -140,265 +140,7 @@ namespace QtObjectPropertyEditor
         return flags;
     }
     
-    QObject* QtObjectPropertyModel::objectAtIndex(const QModelIndex &index) const
-    {
-        // If property names are specified, check if name at row is a path to a child object property.
-        if(!_propertyNames.isEmpty()) {
-            if(_propertyNames.size() > index.row()) {
-                QByteArray propertyName = _propertyNames.at(index.row());
-                if(propertyName.contains('.')) {
-                    int pos = propertyName.lastIndexOf('.');
-                    return descendant(_object, propertyName.left(pos));
-                }
-            }
-        }
-        return _object;
-    }
-    
-    QByteArray QtObjectPropertyModel::propertyNameAtIndex(const QModelIndex &index) const
-    {
-        // If property names are specified, return the name at row.
-        if(!_propertyNames.isEmpty()) {
-            if(_propertyNames.size() > index.row()) {
-                QByteArray propertyName = _propertyNames.at(index.row());
-                if(propertyName.contains('.')) {
-                    int pos = propertyName.lastIndexOf('.');
-                    return propertyName.mid(pos + 1);
-                }
-                return propertyName;
-            }
-            return QByteArray();
-        }
-        // If property names are NOT specified, return the metaObject's property name at row.
-        QObject *object = objectAtIndex(index);
-        if(!object)
-            return QByteArray();
-        const QMetaObject *metaObject = object->metaObject();
-        int numProperties = metaObject->propertyCount();
-        if(numProperties > index.row())
-            return QByteArray(metaObject->property(index.row()).name());
-        // If row is greater than the number of metaObject properties, check for dynamic properties.
-        const QList<QByteArray> &dynamicPropertyNames = object->dynamicPropertyNames();
-        if(numProperties + dynamicPropertyNames.size() > index.row())
-            return dynamicPropertyNames[index.row() - numProperties];
-        return QByteArray();
-    }
-    
-    QModelIndex QtObjectPropertyModel::index(int row, int column, const QModelIndex &/* parent */) const
-    {
-        return createIndex(row, column);
-    }
-    
-    QModelIndex QtObjectPropertyModel::parent(const QModelIndex &/* index */) const
-    {
-        return QModelIndex();
-    }
-    
-    int QtObjectPropertyModel::rowCount(const QModelIndex &/* parent */) const
-    {
-        // Number of properties.
-        if(!_propertyNames.isEmpty())
-            return _propertyNames.size();
-        if(!_object)
-            return 0;
-        const QMetaObject *metaObject = _object->metaObject();
-        return metaObject->propertyCount() + _object->dynamicPropertyNames().size();
-    }
-    
-    int QtObjectPropertyModel::columnCount(const QModelIndex &/* parent */) const
-    {
-        // Property names are in vertical header, property values are in first column.
-        return (_object ? 1 : 0);
-    }
-    
-    QVariant QtObjectPropertyModel::headerData(int section, Qt::Orientation orientation, int role) const
-    {
-        if(role == Qt::DisplayRole) {
-            if(orientation == Qt::Vertical) {
-                QByteArray propertyName = propertyNameAtIndex(createIndex(section, 0));
-                QByteArray childPath;
-                if(_propertyNames.size() > section) {
-                    QByteArray pathToPropertyName = _propertyNames.at(section);
-                    if(pathToPropertyName.contains('.')) {
-                        int pos = pathToPropertyName.lastIndexOf('.');
-                        childPath = pathToPropertyName.left(pos + 1);
-                    }
-                }
-                if(_propertyHeaders.contains(propertyName))
-                    return QVariant(childPath + _propertyHeaders.value(propertyName));
-                return QVariant(childPath + propertyName);
-            } else if(orientation == Qt::Horizontal) {
-                if(section == 0)
-                    return QVariant();
-            }
-        }
-        return QVariant();
-    }
-    
-    QObject* QtObjectListPropertyModel::objectAtIndex(const QModelIndex &index) const
-    {
-        if(_objects.size() <= index.row())
-            return 0;
-        QObject *object = _objects.at(index.row());
-        // If property names are specified, check if name at column is a path to a child object property.
-        if(!_propertyNames.isEmpty()) {
-            if(_propertyNames.size() > index.column()) {
-                QByteArray propertyName = _propertyNames.at(index.column());
-                if(propertyName.contains('.')) {
-                    int pos = propertyName.lastIndexOf('.');
-                    return descendant(object, propertyName.left(pos));
-                }
-            }
-        }
-        return object;
-    }
-    
-    QByteArray QtObjectListPropertyModel::propertyNameAtIndex(const QModelIndex &index) const
-    {
-        // If property names are specified, return the name at column.
-        if(!_propertyNames.isEmpty()) {
-            if(_propertyNames.size() > index.column()) {
-                QByteArray propertyName = _propertyNames.at(index.column());
-                if(propertyName.contains('.')) {
-                    int pos = propertyName.lastIndexOf('.');
-                    return propertyName.mid(pos + 1);
-                }
-                return propertyName;
-            }
-            return QByteArray();
-        }
-        // If property names are NOT specified, return the metaObject's property name at column.
-        QObject *object = objectAtIndex(index);
-        if(!object)
-            return QByteArray();
-        const QMetaObject *metaObject = object->metaObject();
-        int numProperties = metaObject->propertyCount();
-        if(numProperties > index.column())
-            return QByteArray(metaObject->property(index.column()).name());
-        // If column is greater than the number of metaObject properties, check for dynamic properties.
-        const QList<QByteArray> &dynamicPropertyNames = object->dynamicPropertyNames();
-        if(numProperties + dynamicPropertyNames.size() > index.column())
-            return dynamicPropertyNames.at(index.column() - numProperties);
-        return QByteArray();
-    }
-    
-    QModelIndex QtObjectListPropertyModel::index(int row, int column, const QModelIndex &/* parent */) const
-    {
-        return createIndex(row, column);
-    }
-    
-    QModelIndex QtObjectListPropertyModel::parent(const QModelIndex &/* index */) const
-    {
-        return QModelIndex();
-    }
-    
-    int QtObjectListPropertyModel::rowCount(const QModelIndex &/* parent */) const
-    {
-        return _objects.size();
-    }
-    
-    int QtObjectListPropertyModel::columnCount(const QModelIndex &/* parent */) const
-    {
-        // Number of properties.
-        if(!_propertyNames.isEmpty())
-            return _propertyNames.size();
-        if(_objects.isEmpty())
-            return 0;
-        QObject *object = _objects.at(0);
-        const QMetaObject *metaObject = object->metaObject();
-        return metaObject->propertyCount() + object->dynamicPropertyNames().size();
-    }
-    
-    QVariant QtObjectListPropertyModel::headerData(int section, Qt::Orientation orientation, int role) const
-    {
-        if(role == Qt::DisplayRole) {
-            if(orientation == Qt::Vertical) {
-                return QVariant(section);
-            } else if(orientation == Qt::Horizontal) {
-                QByteArray propertyName = propertyNameAtIndex(createIndex(0, section));
-                QByteArray childPath;
-                if(_propertyNames.size() > section) {
-                    QByteArray pathToPropertyName = _propertyNames.at(section);
-                    if(pathToPropertyName.contains('.')) {
-                        int pos = pathToPropertyName.lastIndexOf('.');
-                        childPath = pathToPropertyName.left(pos + 1);
-                    }
-                }
-                if(_propertyHeaders.contains(propertyName))
-                    return QVariant(childPath + _propertyHeaders.value(propertyName));
-                return QVariant(childPath + propertyName);
-            }
-        }
-        return QVariant();
-    }
-    
-    bool QtObjectListPropertyModel::insertRows(int row, int count, const QModelIndex &parent)
-    {
-        // Only valid if we have an object creator method.
-        if(!_objectCreator)
-            return false;
-        bool columnCountWillAlsoChange = _objects.isEmpty() && _propertyNames.isEmpty();
-        beginInsertRows(parent, row, row + count - 1);
-        for(int i = row; i < row + count; ++i) {
-            QObject *object = _objectCreator();
-            _objects.insert(i, object);
-        }
-        endInsertRows();
-        if(row + count < _objects.size())
-            reorderChildObjectsToMatchRowOrder(row + count);
-        if(columnCountWillAlsoChange) {
-            beginResetModel();
-            endResetModel();
-        }
-        emit rowCountChanged();
-        return true;
-    }
-    
-    bool QtObjectListPropertyModel::removeRows(int row, int count, const QModelIndex &parent)
-    {
-        beginRemoveRows(parent, row, row + count - 1);
-        for(int i = row; i < row + count; ++i)
-            delete _objects.at(i);
-        QObjectList::iterator begin = _objects.begin() + row;
-        _objects.erase(begin, begin + count);
-        endRemoveRows();
-        emit rowCountChanged();
-        return true;
-    }
-    
-    bool QtObjectListPropertyModel::moveRows(const QModelIndex &/*sourceParent*/, int sourceRow, int count, const QModelIndex &/*destinationParent*/, int destinationRow)
-    {
-        beginResetModel();
-        QObjectList objectsToMove;
-        for(int i = sourceRow; i < sourceRow + count; ++i)
-            objectsToMove.append(_objects.takeAt(sourceRow));
-        for(int i = 0; i < objectsToMove.size(); ++i) {
-            if(destinationRow + i >= _objects.size())
-                _objects.append(objectsToMove.at(i));
-            else
-                _objects.insert(destinationRow + i, objectsToMove.at(i));
-        }
-        endResetModel();
-        reorderChildObjectsToMatchRowOrder(sourceRow <= destinationRow ? sourceRow : destinationRow);
-        emit rowOrderChanged();
-        return true;
-    }
-    
-    void QtObjectListPropertyModel::reorderChildObjectsToMatchRowOrder(int firstRow)
-    {
-        for(int i = firstRow; i < rowCount(); ++i) {
-            QObject *object = objectAtIndex(createIndex(i, 0));
-            if(object) {
-                QObject *parent = object->parent();
-                if(parent) {
-                    object->setParent(0);
-                    object->setParent(parent);
-                }
-            }
-        }
-    }
-    
-    void ObjectPropertyTreeNode::setObject(QObject *object, int maxChildDepth, const QList<QByteArray> &propertyNames)
+    void QtPropertyTreeModel::Node::setObject(QObject *object, int maxChildDepth, const QList<QByteArray> &propertyNames)
     {
         this->object = object;
         propertyName.clear();
@@ -413,7 +155,7 @@ namespace QtObjectPropertyEditor
             const QMetaProperty metaProperty = metaObject->property(i);
             QByteArray propertyName = QByteArray(metaProperty.name());
             if(propertyNames.isEmpty() || propertyNames.contains(propertyName)) {
-                ObjectPropertyTreeNode *node = new ObjectPropertyTreeNode(this);
+                Node *node = new Node(this);
                 node->propertyName = propertyName;
                 children.append(node);
             }
@@ -422,7 +164,7 @@ namespace QtObjectPropertyEditor
         QList<QByteArray> dynamicPropertyNames = object->dynamicPropertyNames();
         foreach(const QByteArray &propertyName, dynamicPropertyNames) {
             if(propertyNames.isEmpty() || propertyNames.contains(propertyName)) {
-                ObjectPropertyTreeNode *node = new ObjectPropertyTreeNode(this);
+                Node *node = new Node(this);
                 node->propertyName = propertyName;
                 children.append(node);
             }
@@ -437,7 +179,7 @@ namespace QtObjectPropertyEditor
             }
             for(auto it = childMap.begin(); it != childMap.end(); ++it) {
                 foreach(QObject *child, it.value()) {
-                    ObjectPropertyTreeNode *node = new ObjectPropertyTreeNode(this);
+                    Node *node = new Node(this);
                     node->setObject(child, maxChildDepth, propertyNames);
                     children.append(node);
                 }
@@ -445,88 +187,81 @@ namespace QtObjectPropertyEditor
         }
     }
     
-    void QtObjectTreePropertyModel::setObject(QObject *object, int maxChildDepth)
-    {
-        beginResetModel();
-        _root.setObject(object, maxChildDepth, _propertyNames);
-        endResetModel();
-    }
-    
-    ObjectPropertyTreeNode* QtObjectTreePropertyModel::nodeAtIndex(const QModelIndex &index) const
+    QtPropertyTreeModel::Node* QtPropertyTreeModel::nodeAtIndex(const QModelIndex &index) const
     {
         try {
-            return static_cast<ObjectPropertyTreeNode*>(index.internalPointer());
+            return static_cast<Node*>(index.internalPointer());
         } catch(...) {
             return 0;
         }
     }
     
-    QObject* QtObjectTreePropertyModel::objectAtIndex(const QModelIndex &index) const
+    QObject* QtPropertyTreeModel::objectAtIndex(const QModelIndex &index) const
     {
         // If node is an object, return the node's object.
         // Else if node is a property, return the parent node's object.
-        ObjectPropertyTreeNode *node = nodeAtIndex(index);
+        Node *node = nodeAtIndex(index);
         if(!node) return 0;
         if(node->object) return node->object;
         if(node->parent) return node->parent->object;
         return 0;
     }
     
-    QByteArray QtObjectTreePropertyModel::propertyNameAtIndex(const QModelIndex &index) const
+    QByteArray QtPropertyTreeModel::propertyNameAtIndex(const QModelIndex &index) const
     {
         // If node is a property, return the node's property name.
         // Else if node is an object, return "objectName".
-        ObjectPropertyTreeNode *node = nodeAtIndex(index);
+        Node *node = nodeAtIndex(index);
         if(!node) return QByteArray();
         if(!node->propertyName.isEmpty()) return node->propertyName;
         return QByteArray();
     }
     
-    QModelIndex QtObjectTreePropertyModel::index(int row, int column, const QModelIndex &parent) const
+    QModelIndex QtPropertyTreeModel::index(int row, int column, const QModelIndex &parent) const
     {
         // Return a model index whose internal pointer references the appropriate tree node.
         if(column < 0 || column >= 2 || !hasIndex(row, column, parent))
             return QModelIndex();
-        const ObjectPropertyTreeNode *parentNode = parent.isValid() ? nodeAtIndex(parent) : &_root;
+        const Node *parentNode = parent.isValid() ? nodeAtIndex(parent) : &_root;
         if(!parentNode || row < 0 || row >= parentNode->children.size())
             return QModelIndex();
-        ObjectPropertyTreeNode *node = parentNode->children.at(row);
+        Node *node = parentNode->children.at(row);
         return node ? createIndex(row, column, node) : QModelIndex();
     }
     
-    QModelIndex QtObjectTreePropertyModel::parent(const QModelIndex &index) const
+    QModelIndex QtPropertyTreeModel::parent(const QModelIndex &index) const
     {
         // Return a model index for parent node (column must be 0).
         if(!index.isValid())
             return QModelIndex();
-        ObjectPropertyTreeNode *node = nodeAtIndex(index);
+        Node *node = nodeAtIndex(index);
         if(!node)
             return QModelIndex();
-        ObjectPropertyTreeNode *parentNode = node->parent;
+        Node *parentNode = node->parent;
         if(!parentNode || parentNode == &_root)
             return QModelIndex();
         int row = 0;
-        ObjectPropertyTreeNode *grandparentNode = parentNode->parent;
+        Node *grandparentNode = parentNode->parent;
         if(grandparentNode)
             row = grandparentNode->children.indexOf(parentNode);
         return createIndex(row, 0, parentNode);
     }
     
-    int QtObjectTreePropertyModel::rowCount(const QModelIndex &parent) const
+    int QtPropertyTreeModel::rowCount(const QModelIndex &parent) const
     {
         // Return number of child nodes.
-        const ObjectPropertyTreeNode *parentNode = parent.isValid() ? nodeAtIndex(parent) : &_root;
+        const Node *parentNode = parent.isValid() ? nodeAtIndex(parent) : &_root;
         return parentNode ? parentNode->children.size() : 0;
     }
     
-    int QtObjectTreePropertyModel::columnCount(const QModelIndex &parent) const
+    int QtPropertyTreeModel::columnCount(const QModelIndex &parent) const
     {
         // Return 2 for name/value columns.
-        const ObjectPropertyTreeNode *parentNode = parent.isValid() ? nodeAtIndex(parent) : &_root;
+        const Node *parentNode = parent.isValid() ? nodeAtIndex(parent) : &_root;
         return (parentNode ? 2 : 0);
     }
     
-    QVariant QtObjectTreePropertyModel::data(const QModelIndex &index, int role) const
+    QVariant QtPropertyTreeModel::data(const QModelIndex &index, int role) const
     {
         if(!index.isValid())
             return QVariant();
@@ -539,6 +274,8 @@ namespace QtObjectPropertyEditor
                 // Object's class name or else the property name.
                 if(propertyName.isEmpty())
                     return QVariant(object->metaObject()->className());
+                else if(_propertyHeaders.contains(propertyName))
+                    return QVariant(_propertyHeaders[propertyName]);
                 else
                     return QVariant(propertyName);
             } else if(index.column() == 1) {
@@ -552,7 +289,7 @@ namespace QtObjectPropertyEditor
         return QVariant();
     }
     
-    bool QtObjectTreePropertyModel::setData(const QModelIndex &index, const QVariant &value, int role)
+    bool QtPropertyTreeModel::setData(const QModelIndex &index, const QVariant &value, int role)
     {
         if(!index.isValid())
             return false;
@@ -582,7 +319,7 @@ namespace QtObjectPropertyEditor
         return false;
     }
     
-    Qt::ItemFlags QtObjectTreePropertyModel::flags(const QModelIndex &index) const
+    Qt::ItemFlags QtPropertyTreeModel::flags(const QModelIndex &index) const
     {
         Qt::ItemFlags flags = QAbstractItemModel::flags(index);
         if(!index.isValid())
@@ -601,7 +338,7 @@ namespace QtObjectPropertyEditor
         return flags;
     }
     
-    QVariant QtObjectTreePropertyModel::headerData(int section, Qt::Orientation orientation, int role) const
+    QVariant QtPropertyTreeModel::headerData(int section, Qt::Orientation orientation, int role) const
     {
         if(role == Qt::DisplayRole) {
             if(orientation == Qt::Horizontal) {
@@ -613,8 +350,171 @@ namespace QtObjectPropertyEditor
         }
         return QVariant();
     }
+    
+    QObject* QtPropertyTableModel::objectAtIndex(const QModelIndex &index) const
+    {
+        if(_objects.size() <= index.row())
+            return 0;
+        QObject *object = _objects.at(index.row());
+        // If property names are specified, check if name at column is a path to a child object property.
+        if(!_propertyNames.isEmpty()) {
+            if(_propertyNames.size() > index.column()) {
+                QByteArray propertyName = _propertyNames.at(index.column());
+                if(propertyName.contains('.')) {
+                    int pos = propertyName.lastIndexOf('.');
+                    return descendant(object, propertyName.left(pos));
+                }
+            }
+        }
+        return object;
+    }
+    
+    QByteArray QtPropertyTableModel::propertyNameAtIndex(const QModelIndex &index) const
+    {
+        // If property names are specified, return the name at column.
+        if(!_propertyNames.isEmpty()) {
+            if(_propertyNames.size() > index.column()) {
+                QByteArray propertyName = _propertyNames.at(index.column());
+                if(propertyName.contains('.')) {
+                    int pos = propertyName.lastIndexOf('.');
+                    return propertyName.mid(pos + 1);
+                }
+                return propertyName;
+            }
+            return QByteArray();
+        }
+        // If property names are NOT specified, return the metaObject's property name at column.
+        QObject *object = objectAtIndex(index);
+        if(!object)
+            return QByteArray();
+        const QMetaObject *metaObject = object->metaObject();
+        int numProperties = metaObject->propertyCount();
+        if(numProperties > index.column())
+            return QByteArray(metaObject->property(index.column()).name());
+        // If column is greater than the number of metaObject properties, check for dynamic properties.
+        const QList<QByteArray> &dynamicPropertyNames = object->dynamicPropertyNames();
+        if(numProperties + dynamicPropertyNames.size() > index.column())
+            return dynamicPropertyNames.at(index.column() - numProperties);
+        return QByteArray();
+    }
+    
+    QModelIndex QtPropertyTableModel::index(int row, int column, const QModelIndex &/* parent */) const
+    {
+        return createIndex(row, column);
+    }
+    
+    QModelIndex QtPropertyTableModel::parent(const QModelIndex &/* index */) const
+    {
+        return QModelIndex();
+    }
+    
+    int QtPropertyTableModel::rowCount(const QModelIndex &/* parent */) const
+    {
+        return _objects.size();
+    }
+    
+    int QtPropertyTableModel::columnCount(const QModelIndex &/* parent */) const
+    {
+        // Number of properties.
+        if(!_propertyNames.isEmpty())
+            return _propertyNames.size();
+        if(_objects.isEmpty())
+            return 0;
+        QObject *object = _objects.at(0);
+        const QMetaObject *metaObject = object->metaObject();
+        return metaObject->propertyCount() + object->dynamicPropertyNames().size();
+    }
+    
+    QVariant QtPropertyTableModel::headerData(int section, Qt::Orientation orientation, int role) const
+    {
+        if(role == Qt::DisplayRole) {
+            if(orientation == Qt::Vertical) {
+                return QVariant(section);
+            } else if(orientation == Qt::Horizontal) {
+                QByteArray propertyName = propertyNameAtIndex(createIndex(0, section));
+                QByteArray childPath;
+                if(_propertyNames.size() > section) {
+                    QByteArray pathToPropertyName = _propertyNames.at(section);
+                    if(pathToPropertyName.contains('.')) {
+                        int pos = pathToPropertyName.lastIndexOf('.');
+                        childPath = pathToPropertyName.left(pos + 1);
+                    }
+                }
+                if(_propertyHeaders.contains(propertyName))
+                    return QVariant(childPath + _propertyHeaders.value(propertyName));
+                return QVariant(childPath + propertyName);
+            }
+        }
+        return QVariant();
+    }
+    
+    bool QtPropertyTableModel::insertRows(int row, int count, const QModelIndex &parent)
+    {
+        // Only valid if we have an object creator method.
+        if(!_objectCreator)
+            return false;
+        bool columnCountWillAlsoChange = _objects.isEmpty() && _propertyNames.isEmpty();
+        beginInsertRows(parent, row, row + count - 1);
+        for(int i = row; i < row + count; ++i) {
+            QObject *object = _objectCreator();
+            _objects.insert(i, object);
+        }
+        endInsertRows();
+        if(row + count < _objects.size())
+            reorderChildObjectsToMatchRowOrder(row + count);
+        if(columnCountWillAlsoChange) {
+            beginResetModel();
+            endResetModel();
+        }
+        emit rowCountChanged();
+        return true;
+    }
+    
+    bool QtPropertyTableModel::removeRows(int row, int count, const QModelIndex &parent)
+    {
+        beginRemoveRows(parent, row, row + count - 1);
+        for(int i = row; i < row + count; ++i)
+            delete _objects.at(i);
+        QObjectList::iterator begin = _objects.begin() + row;
+        _objects.erase(begin, begin + count);
+        endRemoveRows();
+        emit rowCountChanged();
+        return true;
+    }
+    
+    bool QtPropertyTableModel::moveRows(const QModelIndex &/*sourceParent*/, int sourceRow, int count, const QModelIndex &/*destinationParent*/, int destinationRow)
+    {
+        beginResetModel();
+        QObjectList objectsToMove;
+        for(int i = sourceRow; i < sourceRow + count; ++i)
+            objectsToMove.append(_objects.takeAt(sourceRow));
+        for(int i = 0; i < objectsToMove.size(); ++i) {
+            if(destinationRow + i >= _objects.size())
+                _objects.append(objectsToMove.at(i));
+            else
+                _objects.insert(destinationRow + i, objectsToMove.at(i));
+        }
+        endResetModel();
+        reorderChildObjectsToMatchRowOrder(sourceRow <= destinationRow ? sourceRow : destinationRow);
+        emit rowOrderChanged();
+        return true;
+    }
+    
+    void QtPropertyTableModel::reorderChildObjectsToMatchRowOrder(int firstRow)
+    {
+        for(int i = firstRow; i < rowCount(); ++i) {
+            QObject *object = objectAtIndex(createIndex(i, 0));
+            if(object) {
+                QObject *parent = object->parent();
+                if(parent) {
+                    object->setParent(0);
+                    object->setParent(parent);
+                }
+            }
+        }
+    }
 
-    QWidget* QtObjectPropertyDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const
+    QWidget* QtPropertyDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const
     {
         QVariant value = index.data(Qt::DisplayRole);
         if(value.isValid()) {
@@ -661,12 +561,12 @@ namespace QtObjectPropertyEditor
         return QStyledItemDelegate::createEditor(parent, option, index);
     }
     
-    void QtObjectPropertyDelegate::setEditorData(QWidget *editor, const QModelIndex &index) const
+    void QtPropertyDelegate::setEditorData(QWidget *editor, const QModelIndex &index) const
     {
         QStyledItemDelegate::setEditorData(editor, index);
     }
     
-    void QtObjectPropertyDelegate::setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const
+    void QtPropertyDelegate::setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const
     {
         QVariant value = index.data(Qt::DisplayRole);
         if(value.isValid()) {
@@ -833,7 +733,7 @@ namespace QtObjectPropertyEditor
         QStyledItemDelegate::setModelData(editor, model, index);
     }
     
-    QString QtObjectPropertyDelegate::displayText(const QVariant &value, const QLocale &locale) const
+    QString QtPropertyDelegate::displayText(const QVariant &value, const QLocale &locale) const
     {
         if(value.isValid()) {
             if(value.type() == QVariant::Size) {
@@ -884,7 +784,7 @@ namespace QtObjectPropertyEditor
         return QStyledItemDelegate::displayText(value, locale);
     }
     
-    void QtObjectPropertyDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+    void QtPropertyDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
     {
         QVariant value = index.data(Qt::DisplayRole);
         if(value.isValid()) {
@@ -920,7 +820,7 @@ namespace QtObjectPropertyEditor
         QStyledItemDelegate::paint(painter, option, index);
     }
     
-    bool QtObjectPropertyDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index)
+    bool QtPropertyDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index)
     {
         QVariant value = index.data(Qt::DisplayRole);
         if(value.isValid()) {
@@ -953,16 +853,26 @@ namespace QtObjectPropertyEditor
         return QStyledItemDelegate::editorEvent(event, model, option, index);
     }
     
-    QtObjectPropertyEditor::QtObjectPropertyEditor(QWidget *parent) :
-    QTableView(parent)
+//    QtObjectPropertyEditor::QtObjectPropertyEditor(QWidget *parent) : QTableView(parent)
+//    {
+//        setItemDelegate(&_delegate);
+//        setAlternatingRowColors(true);
+//        verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+//    }
+    
+    QtPropertyTreeEditor::QtPropertyTreeEditor(QWidget *parent) : QTreeView(parent)
     {
         setItemDelegate(&_delegate);
         setAlternatingRowColors(true);
-        verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     }
     
-    QtObjectListPropertyEditor::QtObjectListPropertyEditor(QWidget *parent) :
-    QTableView(parent)
+    void QtPropertyTreeEditor::resizeColumnsToContents()
+    {
+        resizeColumnToContents(0);
+        resizeColumnToContents(1);
+    }
+    
+    QtPropertyTableEditor::QtPropertyTableEditor(QWidget *parent) : QTableView(parent)
     {
         setItemDelegate(&_delegate);
         setAlternatingRowColors(true);
@@ -979,7 +889,7 @@ namespace QtObjectPropertyEditor
         connect(verticalHeader(), SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(verticalHeaderContextMenu(QPoint)));
     }
     
-    void QtObjectListPropertyEditor::horizontalHeaderContextMenu(QPoint pos)
+    void QtPropertyTableEditor::horizontalHeaderContextMenu(QPoint pos)
     {
         QModelIndexList indexes = selectionModel()->selectedColumns();
         QMenu *menu = new QMenu;
@@ -987,7 +897,7 @@ namespace QtObjectPropertyEditor
         menu->popup(horizontalHeader()->viewport()->mapToGlobal(pos));
     }
     
-    void QtObjectListPropertyEditor::verticalHeaderContextMenu(QPoint pos)
+    void QtPropertyTableEditor::verticalHeaderContextMenu(QPoint pos)
     {
         QModelIndexList indexes = selectionModel()->selectedRows();
         QMenu *menu = new QMenu;
@@ -1001,12 +911,12 @@ namespace QtObjectPropertyEditor
         menu->popup(verticalHeader()->viewport()->mapToGlobal(pos));
     }
     
-    void QtObjectListPropertyEditor::appendRow()
+    void QtPropertyTableEditor::appendRow()
     {
         model()->insertRows(model()->rowCount(), 1);
     }
     
-    void QtObjectListPropertyEditor::insertSelectedRows()
+    void QtPropertyTableEditor::insertSelectedRows()
     {
         QModelIndexList indexes = selectionModel()->selectedRows();
         if(indexes.size() == 0)
@@ -1018,7 +928,7 @@ namespace QtObjectPropertyEditor
         model()->insertRows(rows.at(0), rows.size());
     }
     
-    void QtObjectListPropertyEditor::removeSelectedRows()
+    void QtPropertyTableEditor::removeSelectedRows()
     {
         QModelIndexList indexes = selectionModel()->selectedRows();
         if(indexes.size() == 0)
@@ -1031,9 +941,9 @@ namespace QtObjectPropertyEditor
             model()->removeRows(rows.at(i), 1);
     }
     
-    void QtObjectListPropertyEditor::handleSectionMove(int /* logicalIndex */, int oldVisualIndex, int newVisualIndex)
+    void QtPropertyTableEditor::handleSectionMove(int /* logicalIndex */, int oldVisualIndex, int newVisualIndex)
     {
-        if(QtObjectListPropertyModel *propertyModel = qobject_cast<QtObjectListPropertyModel*>(model())) {
+        if(QtPropertyTableModel *propertyModel = qobject_cast<QtPropertyTableModel*>(model())) {
             // Move objects in the model, and then move the sections back to maintain logicalIndex order.
             propertyModel->moveRows(QModelIndex(), oldVisualIndex, 1, QModelIndex(), newVisualIndex);
             disconnect(verticalHeader(), SIGNAL(sectionMoved(int, int, int)), this, SLOT(handleSectionMove(int, int, int)));
@@ -1042,47 +952,15 @@ namespace QtObjectPropertyEditor
         }
     }
     
-    void QtObjectListPropertyEditor::keyPressEvent(QKeyEvent *event)
+    void QtPropertyTableEditor::keyPressEvent(QKeyEvent *event)
     {
         if(event->key() == Qt::Key_Plus)
             appendRow();
     }
     
-    QtObjectTreePropertyEditor::QtObjectTreePropertyEditor(QWidget *parent) :
-    QTreeView(parent)
-    {
-        setItemDelegate(&_delegate);
-        setAlternatingRowColors(true);
-    }
-    
-    QtObjectPropertyDialog::QtObjectPropertyDialog(QObject *object, QWidget *parent) : QDialog(parent)
-    {
-        model.setObject(object);
-        
-        _editor = new QtObjectPropertyEditor::QtObjectPropertyEditor();
-        _editor->setModel(&model);
-        _editor->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-        _editor->horizontalHeader()->hide();
-        
-        QVBoxLayout *layout = new QVBoxLayout(this);
-        layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(0);
-        layout->setMargin(0);
-        layout->addWidget(_editor);
-        
-        _buttonBox = new QDialogButtonBox(QDialogButtonBox::Close);
-        connect(_buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
-        connect(_buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        _buttonBox->setCenterButtons(true);
-        layout->addWidget(_buttonBox);
-        
-        _editor->resizeColumnToContents(0);
-        _editor->setColumnWidth(0, _editor->columnWidth(0) + 100);
-    }
-    
 #ifdef DEBUG
     
-    int testQtObjectPropertyEditor(int argc, char **argv)
+    int testQtPropertyTreeEditor(int argc, char **argv)
     {
         QApplication app(argc, argv);
         
@@ -1097,7 +975,7 @@ namespace QtObjectPropertyEditor
         object.setProperty("myDynamicDateTime", QDateTime::currentDateTime());
         
         // Model.
-        QtObjectPropertyModel model;
+        QtPropertyTreeModel model;
         model.setObject(&object);
         
         // Property names.
@@ -1111,7 +989,7 @@ namespace QtObjectPropertyEditor
         model.setPropertyHeaders(propertyHeaders);
         
         // Editor UI.
-        QtObjectPropertyEditor editor;
+        QtPropertyTreeEditor editor;
         editor.setModel(&model);
         editor.show();
         editor.resizeColumnsToContents();
@@ -1125,7 +1003,7 @@ namespace QtObjectPropertyEditor
     
     QObject* newTestObject(QObject *parent) { return new TestObject("", parent); }
     
-    int testQtObjectListPropertyEditor(int argc, char **argv)
+    int testQtPropertyTableEditor(int argc, char **argv)
     {
         QApplication app(argc, argv);
         
@@ -1144,7 +1022,7 @@ namespace QtObjectPropertyEditor
         }
         
         // Model.
-        QtObjectListPropertyModel model;
+        QtPropertyTableModel model;
         model.setObjects(objects);
         model.setObjectCreator(std::bind(newTestObject, &parent));
         
@@ -1159,7 +1037,7 @@ namespace QtObjectPropertyEditor
         model.setPropertyHeaders(propertyHeaders);
         
         // Editor UI.
-        QtObjectListPropertyEditor editor;
+        QtPropertyTableEditor editor;
         editor.setModel(&model);
         editor.show();
         editor.resizeColumnsToContents();
@@ -1173,36 +1051,6 @@ namespace QtObjectPropertyEditor
         return status;
     }
     
-    int testQtObjectTreePropertyEditor(int argc, char **argv)
-    {
-        QApplication app(argc, argv);
-        
-        // Object.
-        TestObject object("My Obj");
-        
-        // Dynamic properties.
-        object.setProperty("myDynamicBool", false);
-        object.setProperty("myDynamicInt", 3);
-        object.setProperty("myDynamicDouble", 3.0);
-        object.setProperty("myDynamicString", "3 amigos");
-        object.setProperty("myDynamicDateTime", QDateTime::currentDateTime());
-        
-        // Model.
-        QtObjectTreePropertyModel model;
-        model.setObject(&object);
-        
-        // Editor UI.
-        QtObjectTreePropertyEditor editor;
-        editor.setModel(&model);
-        editor.show();
-        
-        int status = app.exec();
-        
-        object.dumpObjectInfo();
-        
-        return status;
-    }
-    
 #endif // DEBUG
     
-} // QtObjectPropertyEditor
+} // QtPropertyEditor

@@ -5,8 +5,8 @@
  * Email: marcel.goldschen@gmail.com
  * -------------------------------------------------------------------------------- */
 
-#ifndef __QtObjectPropertyEditor_H__
-#define __QtObjectPropertyEditor_H__
+#ifndef __QtPropertyEditor_H__
+#define __QtPropertyEditor_H__
 
 #include <functional>
 
@@ -32,7 +32,7 @@
 #include <QDateTime>
 #endif
 
-namespace QtObjectPropertyEditor
+namespace QtPropertyEditor
 {
     // List all object property names.
     QList<QByteArray> getObjectPropertyNames(QObject *object);
@@ -63,59 +63,84 @@ namespace QtObjectPropertyEditor
     };
     
     /* --------------------------------------------------------------------------------
-     * Property model for a single QObject.
+     * Property tree model for a QObject tree.
+     * Max tree depth can be specified (i.e. depth = 0 --> single object only).
      * -------------------------------------------------------------------------------- */
-    class QtObjectPropertyModel : public QtAbstractPropertyModel
+    class QtPropertyTreeModel : public QtAbstractPropertyModel
     {
         Q_OBJECT
         
     public:
-        QtObjectPropertyModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _object(0) {}
+        // Internal tree node.
+        struct Node
+        {
+            // Node traversal.
+            Node *parent;
+            QList<Node*> children;
+            
+            // Node data.
+            QObject *object;
+            QByteArray propertyName;
+            
+            Node(Node *parent = 0) : parent(parent), object(0) {}
+            ~Node() { qDeleteAll(children); }
+            
+            void setObject(QObject *object, int maxChildDepth = -1, const QList<QByteArray> &propertyNames = QList<QByteArray>());
+        };
         
-        // Property getters.
-        QObject* object() const { return _object; }
+        QtPropertyTreeModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _maxTreeDepth(-1) {}
+        
+        // Getters.
+        QObject* object() const { return _root.object; }
+        int maxDepth() const { return _maxTreeDepth; }
         QList<QByteArray> propertyNames() const { return _propertyNames; }
         QHash<QByteArray, QString> propertyHeaders() const { return _propertyHeaders; }
         
-        // Property setters.
-        void setObject(QObject *object) { beginResetModel(); _object = object; endResetModel(); }
-        void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; endResetModel(); }
+        // Setters.
+        void setObject(QObject *object) { beginResetModel(); _root.setObject(object, _maxTreeDepth, _propertyNames); endResetModel(); }
+        void setMaxDepth(int i) { _maxTreeDepth = i; }
+        void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; setObject(object()); endResetModel(); }
         void setPropertyHeaders(const QHash<QByteArray, QString> &headers) { beginResetModel(); _propertyHeaders = headers; endResetModel(); }
         
         // Model interface.
+        Node* nodeAtIndex(const QModelIndex &index) const;
         QObject* objectAtIndex(const QModelIndex &index) const;
         QByteArray propertyNameAtIndex(const QModelIndex &index) const;
         QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const;
         QModelIndex parent(const QModelIndex &index) const;
         int rowCount(const QModelIndex &parent = QModelIndex()) const;
         int columnCount(const QModelIndex &parent = QModelIndex()) const;
+        QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
+        bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole);
+        Qt::ItemFlags flags(const QModelIndex &index) const;
         QVariant headerData(int section, Qt::Orientation orientation, int role) const;
         
     protected:
-        QObject *_object;
+        Node _root;
+        int _maxTreeDepth;
         QList<QByteArray> _propertyNames;
         QHash<QByteArray, QString> _propertyHeaders;
     };
     
     /* --------------------------------------------------------------------------------
-     * Property model for a list of QObjects (same properties for each).
+     * Property table model for a list of QObjects (rows are objects, columns are properties).
      * -------------------------------------------------------------------------------- */
-    class QtObjectListPropertyModel : public QtAbstractPropertyModel
+    class QtPropertyTableModel : public QtAbstractPropertyModel
     {
         Q_OBJECT
         
     public:
         typedef std::function<QObject*()> ObjectCreatorFunction;
         
-        QtObjectListPropertyModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _objectCreator(0) {}
+        QtPropertyTableModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _objectCreator(0) {}
         
-        // Property getters.
+        // Getters.
         QObjectList objects() const { return _objects; }
         QList<QByteArray> propertyNames() const { return _propertyNames; }
         QHash<QByteArray, QString> propertyHeaders() const { return _propertyHeaders; }
         ObjectCreatorFunction objectCreator() const { return _objectCreator; }
         
-        // Property setters.
+        // Setters.
         void setObjects(const QObjectList &objects) { beginResetModel(); _objects = objects; endResetModel(); }
         template <class T>
         void setObjects(const QList<T*> &objects);
@@ -152,7 +177,7 @@ namespace QtObjectPropertyEditor
     };
     
     template <class T>
-    void QtObjectListPropertyModel::setObjects(const QList<T*> &objects)
+    void QtPropertyTableModel::setObjects(const QList<T*> &objects)
     {
         beginResetModel();
         _objects.clear();
@@ -164,66 +189,12 @@ namespace QtObjectPropertyEditor
     }
     
     /* --------------------------------------------------------------------------------
-     * Property model for an entire QObject tree.
-     * -------------------------------------------------------------------------------- */
-    struct ObjectPropertyTreeNode
-    {
-        // Node traversal.
-        ObjectPropertyTreeNode *parent;
-        QList<ObjectPropertyTreeNode*> children;
-        
-        // Node data.
-        QObject *object;
-        QByteArray propertyName;
-        
-        ObjectPropertyTreeNode(ObjectPropertyTreeNode *parent = 0) : parent(parent), object(0) {}
-        ~ObjectPropertyTreeNode() { qDeleteAll(children); }
-        
-        void setObject(QObject *object, int maxChildDepth = -1, const QList<QByteArray> &propertyNames = QList<QByteArray>());
-    };
-    
-    class QtObjectTreePropertyModel : public QtAbstractPropertyModel
-    {
-        Q_OBJECT
-        
-    public:
-        QtObjectTreePropertyModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _root(0) {}
-        
-        // Property getters.
-        QObject* object() const { return _root.object; }
-        QList<QByteArray> propertyNames() const { return _propertyNames; }
-        QHash<QByteArray, QString> propertyHeaders() const { return _propertyHeaders; }
-        
-        // Property setters.
-        void setObject(QObject *object, int maxChildDepth = -1);
-        void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; endResetModel(); }
-        void setPropertyHeaders(const QHash<QByteArray, QString> &headers) { beginResetModel(); _propertyHeaders = headers; endResetModel(); }
-        
-        // Model interface.
-        ObjectPropertyTreeNode* nodeAtIndex(const QModelIndex &index) const;
-        QObject* objectAtIndex(const QModelIndex &index) const;
-        QByteArray propertyNameAtIndex(const QModelIndex &index) const;
-        QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const;
-        QModelIndex parent(const QModelIndex &index) const;
-        int rowCount(const QModelIndex &parent = QModelIndex()) const;
-        int columnCount(const QModelIndex &parent = QModelIndex()) const;
-        QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
-        bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole);
-        Qt::ItemFlags flags(const QModelIndex &index) const;
-        QVariant headerData(int section, Qt::Orientation orientation, int role) const;
-    protected:
-        ObjectPropertyTreeNode _root;
-        QList<QByteArray> _propertyNames;
-        QHash<QByteArray, QString> _propertyHeaders;
-    };
-    
-    /* --------------------------------------------------------------------------------
      * Property editor delegate.
      * -------------------------------------------------------------------------------- */
-    class QtObjectPropertyDelegate: public QStyledItemDelegate
+    class QtPropertyDelegate: public QStyledItemDelegate
     {
     public:
-        QtObjectPropertyDelegate(QWidget *parent = 0) : QStyledItemDelegate(parent) {}
+        QtPropertyDelegate(QWidget *parent = 0) : QStyledItemDelegate(parent) {}
         
         QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const Q_DECL_OVERRIDE;
         void setEditorData(QWidget *editor, const QModelIndex &index) const Q_DECL_OVERRIDE;
@@ -236,30 +207,32 @@ namespace QtObjectPropertyEditor
     };
     
     /* --------------------------------------------------------------------------------
-     * Editor for properties in a single QObject.
+     * Tree editor for properties in a QObject tree.
      * -------------------------------------------------------------------------------- */
-    class QtObjectPropertyEditor : public QTableView
+    class QtPropertyTreeEditor : public QTreeView
     {
         Q_OBJECT
         
     public:
-        QtObjectPropertyEditor(QWidget *parent = 0);
+        QtPropertyTreeEditor(QWidget *parent = 0);
         
-        QSize sizeHint() const Q_DECL_OVERRIDE { return getTableSize(this); }
-    
+    public slots:
+        void resizeColumnsToContents();
+        
     protected:
-        QtObjectPropertyDelegate _delegate;
+        QtPropertyDelegate _delegate;
     };
     
+    
     /* --------------------------------------------------------------------------------
-     * Editor for properties in a list of QObjects.
+     * Table editor for properties in a list of QObjects.
      * -------------------------------------------------------------------------------- */
-    class QtObjectListPropertyEditor : public QTableView
+    class QtPropertyTableEditor : public QTableView
     {
         Q_OBJECT
         
     public:
-        QtObjectListPropertyEditor(QWidget *parent = 0);
+        QtPropertyTableEditor(QWidget *parent = 0);
         
         QSize sizeHint() const Q_DECL_OVERRIDE { return getTableSize(this); }
         
@@ -272,40 +245,9 @@ namespace QtObjectPropertyEditor
         void handleSectionMove(int logicalIndex, int oldVisualIndex, int newVisualIndex);
         
     protected:
-        QtObjectPropertyDelegate _delegate;
+        QtPropertyDelegate _delegate;
         
         void keyPressEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
-    };
-    
-    /* --------------------------------------------------------------------------------
-     * Editor for properties in an entire QObject tree.
-     * -------------------------------------------------------------------------------- */
-    class QtObjectTreePropertyEditor : public QTreeView
-    {
-        Q_OBJECT
-        
-    public:
-        QtObjectTreePropertyEditor(QWidget *parent = 0);
-        
-    protected:
-        QtObjectPropertyDelegate _delegate;
-    };
-    
-    /* --------------------------------------------------------------------------------
-     * Dialog for QtObjectPropertyEditor.
-     * -------------------------------------------------------------------------------- */
-    class QtObjectPropertyDialog : public QDialog
-    {
-        Q_OBJECT
-        
-    public:
-        QtObjectPropertyModel model;
-        
-        QtObjectPropertyDialog(QObject *object, QWidget *parent = 0);
-        
-    protected:
-        QtObjectPropertyEditor *_editor;
-        QDialogButtonBox *_buttonBox;
     };
     
 #ifdef DEBUG
@@ -403,15 +345,14 @@ namespace QtObjectPropertyEditor
      * Example:
      * #include "QtObjectPropertyEditor"
      * int main(int argc, char **argv) {
-     *   return QtObjectPropertyEditor::testQtObjectListPropertyEditor(argc, argv);
+     *   return QtPropertyEditor::testQtPropertyTreeEditor(argc, argv);
      * }
      * -------------------------------------------------------------------------------- */
-    int testQtObjectPropertyEditor(int argc, char **argv);
-    int testQtObjectListPropertyEditor(int argc, char **argv);
-    int testQtObjectTreePropertyEditor(int argc, char **argv);
+    int testQtPropertyTreeEditor(int argc, char **argv);
+    int testQtPropertyTableEditor(int argc, char **argv);
     
 #endif // DEBUG
     
-} // QtObjectPropertyEditor
+} // QtPropertyEditor
 
-#endif // __QtObjectPropertyEditor_H__
+#endif // __QtPropertyEditor_H__

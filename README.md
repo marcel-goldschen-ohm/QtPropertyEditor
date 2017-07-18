@@ -1,13 +1,11 @@
-# QtObjectPropertyEditor
+# QtPropertyEditor
 
-UI property editors for a QObject or a QObjectList.
+UI property editors for QObject-derived classes.
 
-* Editor for a single QObject is a column list of properties.
-    * <img src="images/QtObjectPropertyEditor.png" width="200" />
-* Editor for a list of QObjects is a table where rows are objects and columns are properties.
-    * <img src="images/QtObjectListPropertyEditor.png" width="600" />
-    * Rows (objects) can be rearranged by dragging the row header with the mouse.
-    * Allows dynamic insertion/deletion of objects (rows) via a context menu obtainable by right clicking on the row headers (similar to Excel).
+* QObject editor is tree view similar to the editor in QtDesigner.
+* QObjectList editor is a table view where rows are objects and columns are properties.
+    * Allows dynamic object (row) insertion and deletion similar to Excel.
+    * Supports object reordering by dragging rows with the mouse.
 * Default delegates for editing common value types (these are in addition to the default delegates already in Qt):
     * bool: QCheckBox
     * QEnum: QComboBox
@@ -15,13 +13,23 @@ UI property editors for a QObject or a QObjectList.
     * QSize/QSizeF: QLineEdit for text format *(w x h)*
     * QPoint/QPointF: QLineEdit for text format *(x, y)*
     * QRect/QRectF: QLineEdit for text format *[(x, y) w x h]*
-* Default is a flat editor for an object's properties excluding properties of child objects.
-    * Specific child object properties can be made available in the editor via a *"path.to.child.property"* string. In this case, *path*, *to* and *child* are the object names of the child object tree, and *property* is a property name for *child*.
 
 **Author**: Marcel Goldschen-Ohm  
 **Email**:  <marcel.goldschen@gmail.com>  
 **License**: MIT  
 Copyright (c) 2017 Marcel Goldschen-Ohm 
+
+## QtPropertyTreeEditor
+
+Property editor for a QObject is a tree view with two columns of property name/value pairs. Child objects are expandable branches with their own property name/value pairs. Maximum tree depth can be specified (i.e. depth = 0 implies no children shown).
+
+<img src="images/QtPropertyTreeEditor.png" width="300" />
+
+## QtPropertyTableEditor
+
+Editor for a list of QObjects is a table where rows are objects and columns are properties. Allows dynamic insertion/deletion of objects (rows) via a context menu obtainable by right clicking on the row headers (similar to Excel). List objects (rows) can be reordered by dragging the row header with the mouse. :warning: **All of this only makes sense if all of the objects to be exposed in the editor have the same properties (i.e. they are all the same type of object).** 
+
+<img src="images/QtPropertyTableEditor.png" width="600" />
 
 ## INSTALL
 
@@ -34,46 +42,44 @@ Everything is in:
 
 * [Qt](http://www.qt.io)
 
-## Edit properties of a single QObject.
+## QtPropertyTreeEditor Example
 
-See `QtObjectPropertyEditor::testQtObjectPropertyEditor` for an example. Note, this is part of `test/test.cpp`.
-
-For this basic example, we need a QApplication, same as always.
+The QApplication, same as always.
 
 ```cpp
 QApplication app(...);
 ```
 
-Any object derived from QObject whose properties will be exposed in the editor.
+An object derived from QObject whose properties will be exposed in the editor.
 
 ```cpp
-QtObjectPropertyEditor::TestObject object;
+QtPropertyEditor::TestObject object;
 ```
 
-**[Note]** Properties of child object's are by default NOT exposed in the editor unless we specify them directly (see below).
+Children of the object (and their children recursively) are shown as branches of the object's tree.
 
 ```cpp
-QtObjectPropertyEditor::TestObject *child = 
-    new QtObjectPropertyEditor::TestObject("MyChild");
+QtPropertyEditor::TestObject *child = 
+    new QtPropertyEditor::TestObject("MyChild");
 child->setParent(&object);
 ```
 
 The model interface to our object's properties.
 
 ```cpp
-QtObjectPropertyEditor::QtObjectPropertyModel model;
+QtPropertyEditor::QtPropertyTreeModel model;
 model.setObject(&object);
 ```
 
-**[Optional]** You can define which properties to expose in the editor (default includes all properties including dynamic properties). For example, if we only wanted to show the "objectName" and "myInt" properties of our object as well as the "myDouble" property of the child object named "MyChild":
+**[Optional]** You can define which properties to expose in the editor (default includes all properties including dynamic properties). For example, if we only wanted to show the "objectName" and "myInt" properties:
     
 ```cpp
 QList<QByteArray> propertyNames;
-propertyNames << "objectName" << "myInt" << "MyChild.myDouble";
+propertyNames << "objectName" << "myInt";
 model.setPropertyNames(propertyNames);
 ```
 
-**[Optional]** You can define the property column headers that will be displayed (otherwise they default to the property names). For example, if we wanted to show "Name" in the column header instead of the default "objectName":
+**[Optional]** You can map property names to headers that will be displayed instead of the property name. Usually, this is when you want some nonstandard charachters to be displayed that are not allowed to be part of the property name. For example, if we wanted to the "objectName" property to be displayed as if it was the "Name" property instead:
 
 ```cpp
 QHash<QByteArray, QString> propertyHeaders;
@@ -81,10 +87,10 @@ propertyHeaders["objectName"] = "Name";
 model.setPropertyHeaders(propertyHeaders);
 ```
 
-The table view UI editor linked to our object's model interface.
+The tree view UI editor linked to our object's model interface.
 
 ```cpp
-QtObjectPropertyEditor::QtObjectPropertyEditor editor;
+QtPropertyEditor::QtPropertyTreeEditor editor;
 editor.setModel(&model);
 ```
 
@@ -95,11 +101,9 @@ editor.show();
 app.exec();
 ```
 
-## Edit properties for each object in a QObjectList.
+## QtPropertyTableEditor Example
 
-See `QtObjectPropertyEditor::testQtObjectListPropertyEditor` for an example. Note, this is part of `test/test.cpp`.
-
-For this basic example, we need a QApplication, same as always.
+The QApplication, same as always.
 
 ```cpp
 QApplication app(...);
@@ -110,7 +114,7 @@ A list of objects derived from QObject whose properties will be exposed in the e
 ```cpp
 QObject parent;
 for(int i = 0; i < 5; ++i) {
-    QObject *object = new QtObjectPropertyEditor::TestObject(
+    QObject *object = new QtPropertyEditor::TestObject(
         "My Obj " + QString::number(i));
     object->setParent(&parent);
 }
@@ -120,17 +124,17 @@ QObjectList objects = parent->children();
 The model interface to the properties in our list of objects.
 
 ```cpp
-QtObjectPropertyEditor::QtObjectListPropertyModel model;
+QtPropertyEditor::QtPropertyTableModel model;
 model.setObjects(objects);
 ```
 
-**[Optional]** For dynamic object insertion in the list, you need to supply an object creator function of type `QtObjectListPropertyModel::ObjectCreatorFunction` which is a typedef for `std::function<QObject*()>`. For convenience, QtObjectListPropertyModel defines defaultObjectCreator() templated on the derived type, but you are free to use your own creator function as well. **If you want the newly created objects to be children of a particular parent object, you need to wrap this into the creator function. For example, as shown below.**
+**[Optional]** For dynamic object insertion in the list, you need to supply an object creator function of type `QtPropertyTableModel::ObjectCreatorFunction` which is a typedef for `std::function<QObject*()>`. **If you want the newly created objects to be children of a particular parent object, you need to wrap this into the creator function. For example, as shown below.**
     
 ```cpp
 // The creator function.
 QObject* createNewTestObject(QObject *parent)
 {
-    return new QtObjectPropertyEditor::TestObject(
+    return new QtPropertyEditor::TestObject(
         "New Test Object", parent);
 }
 ```
@@ -143,12 +147,20 @@ std::function<QObject*()> func =
 model.setObjectCreator(func);
 ```
 
-**[Optional]** Exposed properties and their column headers can be specified exactly the same as shown in the example above for the editor of a single QObject.
+**[Optional]** Exposed properties and their column headers can be specified exactly the same as shown in the example above for QtPropertyTreeEditor.
+
+**[Optional]** Default is a flat editor for each object's properties excluding properties of child objects. However, specific child object properties can be made available in the table view by adding *"path.to.child.property"* to the specified list of property names to be displayed. In this case, *path*, *to* and *child* are the object names of a child object tree, and *property* is a property name for *child*. Note that for this to make sense all objects in the list should have a valid *"path.to.child.property"*. For example, to expose the "myInt" property of the child object named "child":
+    
+```cpp
+QList<QByteArray> propertyNames;
+propertyNames << "child.myInt";
+model.setPropertyNames(propertyNames);
+```
 
 The table view UI editor linked to the model interface for our list of objects.
 
 ```cpp
-QtObjectPropertyEditor::QtObjectListPropertyEditor editor;
+QtPropertyEditor::QtPropertyTableEditor editor;
 editor.setModel(&model);
 ```
 
