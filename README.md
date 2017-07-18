@@ -29,7 +29,7 @@ Property editor for a QObject is a tree view with two columns of property name/v
 
 Editor for a list of QObjects is a table where rows are objects and columns are properties. Allows dynamic insertion/deletion of objects (rows) via a context menu obtainable by right clicking on the row headers (similar to Excel). List objects (rows) can be reordered by dragging the row header with the mouse. :warning: **All of this only makes sense if all of the objects to be exposed in the editor have the same properties (i.e. they are all the same type of object).** 
 
-<img src="images/QtPropertyTableEditor.png" width="600" />
+<img src="images/QtPropertyTableEditor.png" width="800" />
 
 ## INSTALL
 
