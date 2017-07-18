@@ -5,8 +5,8 @@
  * Email: marcel.goldschen@gmail.com
  * -------------------------------------------------------------------------------- */
 
-#ifndef __QtPropertyEditorTest_H__
-#define __QtPropertyEditorTest_H__
+#ifndef __test_QtPropertyEditor_H__
+#define __test_QtPropertyEditor_H__
 
 #include <QDateTime>
 #include <QObject>
@@ -105,4 +105,4 @@ protected:
     QRectF _myRectF;
 };
 
-#endif // __QtPropertyEditorTest_H__
+#endif // __test_QtPropertyEditor_H__

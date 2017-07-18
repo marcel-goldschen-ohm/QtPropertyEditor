@@ -5,7 +5,7 @@
  * Email: marcel.goldschen@gmail.com
  * -------------------------------------------------------------------------------- */
 
-#include "QtPropertyEditorTest.h"
+#include "test_QtPropertyEditor.h"
 
 #include <QApplication>
 
