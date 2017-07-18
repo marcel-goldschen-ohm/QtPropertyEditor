@@ -1,6 +1,4 @@
-# e.g. for MACX, run: qmake -spec macx-xcode test.pro
-
-TARGET = test
+TARGET = QtPropertyEditorTest
 TEMPLATE = app
 QT += core gui widgets
 CONFIG += c++11
@@ -13,6 +11,9 @@ UI_DIR = Debug/.ui
 DEFINES += DEBUG
 
 INCLUDEPATH += ..
+
 HEADERS += ../QtPropertyEditor.h
 SOURCES += ../QtPropertyEditor.cpp
-SOURCES += test.cpp
+
+HEADERS += QtPropertyEditorTest.h
+SOURCES += QtPropertyEditorTest.cpp
