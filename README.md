@@ -35,8 +35,8 @@ Editor for a list of QObjects is a table where rows are objects and columns are 
 
 Everything is in:
 
-* `QtObjectPropertyEditor.h`
-* `QtObjectPropertyEditor.cpp`
+* `QtPropertyEditor.h`
+* `QtPropertyEditor.cpp`
 
 ### Requires:
 
