@@ -53,14 +53,13 @@ QApplication app(...);
 An object derived from QObject whose properties will be exposed in the editor.
 
 ```cpp
-QtPropertyEditor::TestObject object;
+TestObject object; // See test_QtPropertyEditor.h
 ```
 
 Children of the object (and their children recursively) are shown as branches of the object's tree.
 
 ```cpp
-QtPropertyEditor::TestObject *child = 
-    new QtPropertyEditor::TestObject("MyChild");
+TestObject *child = new TestObject("MyChild");
 child->setParent(&object);
 ```
 
@@ -114,8 +113,8 @@ A list of objects derived from QObject whose properties will be exposed in the e
 ```cpp
 QObject parent;
 for(int i = 0; i < 5; ++i) {
-    QObject *object = new QtPropertyEditor::TestObject(
-        "My Obj " + QString::number(i));
+    // TestObject defined in test_QtPropertyEditor.h
+    QObject *object = new TestObject("My Obj " + QString::number(i));
     object->setParent(&parent);
 }
 QObjectList objects = parent->children();
@@ -134,8 +133,8 @@ model.setObjects(objects);
 // The creator function.
 QObject* createNewTestObject(QObject *parent)
 {
-    return new QtPropertyEditor::TestObject(
-        "New Test Object", parent);
+    // TestObject defined in test_QtPropertyEditor.h
+    return new TestObject("New Test Object", parent);
 }
 ```
     
