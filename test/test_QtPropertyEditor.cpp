@@ -30,7 +30,7 @@ int testQtPropertyTreeEditor(int argc, char **argv)
     model.setObject(&object);
     
     // Property names.
-    QList<QByteArray> propertyNames = QtPropertyEditor::getObjectPropertyNames(&object);
+    QList<QByteArray> propertyNames = QtPropertyEditor::getPropertyNames(&object);
     propertyNames.append("child.myInt");
     model.setPropertyNames(propertyNames);
     
@@ -78,7 +78,7 @@ int testQtPropertyTableEditor(int argc, char **argv)
     model.setObjectCreator(std::bind(newTestObject, &parent));
     
     // Property names.
-    QList<QByteArray> propertyNames = QtPropertyEditor::getMetaObjectPropertyNames(TestObject::staticMetaObject);
+    QList<QByteArray> propertyNames = QtPropertyEditor::getMetaPropertyNames(TestObject::staticMetaObject);
     propertyNames.append("child.myInt");
     model.setPropertyNames(propertyNames);
     

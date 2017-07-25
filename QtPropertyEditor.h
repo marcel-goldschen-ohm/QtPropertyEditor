@@ -34,8 +34,8 @@
 namespace QtPropertyEditor
 {
     // List all object property names.
-    QList<QByteArray> getObjectPropertyNames(QObject *object);
-    QList<QByteArray> getMetaObjectPropertyNames(const QMetaObject &metaObject);
+    QList<QByteArray> getPropertyNames(QObject *object);
+    QList<QByteArray> getMetaPropertyNames(const QMetaObject &metaObject);
     
     // Handle descendant properties such as "child.grandchild.property".
     QObject* descendant(QObject *object, const QByteArray &pathToDescendantObject);

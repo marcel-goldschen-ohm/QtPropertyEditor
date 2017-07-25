@@ -19,15 +19,15 @@
 
 namespace QtPropertyEditor
 {
-    QList<QByteArray> getObjectPropertyNames(QObject *object)
+    QList<QByteArray> getPropertyNames(QObject *object)
     {
-        QList<QByteArray> propertyNames = getMetaObjectPropertyNames(*object->metaObject());
+        QList<QByteArray> propertyNames = getMetaPropertyNames(*object->metaObject());
         foreach(const QByteArray &dynamicPropertyName, object->dynamicPropertyNames())
             propertyNames << dynamicPropertyName;
         return propertyNames;
     }
     
-    QList<QByteArray> getMetaObjectPropertyNames(const QMetaObject &metaObject)
+    QList<QByteArray> getMetaPropertyNames(const QMetaObject &metaObject)
     {
         QList<QByteArray> propertyNames;
         int numProperties = metaObject.propertyCount();
