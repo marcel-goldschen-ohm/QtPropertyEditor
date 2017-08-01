@@ -38,6 +38,15 @@ namespace QtPropertyEditor
         return propertyNames;
     }
     
+    QList<QByteArray> getDerivedPropertyNames(QObject *object)
+    {
+        QList<QByteArray> propertyNames = getPropertyNames(object);
+        QList<QByteArray> superPropertyNames = getMetaPropertyNames(*object->metaObject()->superClass());
+        foreach(const QByteArray &superPropertyName, superPropertyNames)
+            propertyNames.removeOne(superPropertyName);
+        return propertyNames;
+    }
+    
     QObject* descendant(QObject *object, const QByteArray &pathToDescendantObject)
     {
         // Get descendent object specified by "path.to.descendant", where "path", "to" and "descendant"
