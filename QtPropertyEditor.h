@@ -98,7 +98,7 @@ namespace QtPropertyEditor
         
         // Setters.
         void setObject(QObject *object) { beginResetModel(); _root.setObject(object, _maxTreeDepth, _propertyNames); endResetModel(); }
-        void setMaxDepth(int i) { _maxTreeDepth = i; }
+        void setMaxDepth(int i) { beginResetModel(); _maxTreeDepth = i; setObject(object()); endResetModel(); }
         void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; setObject(object()); endResetModel(); }
         void setPropertyHeaders(const QHash<QByteArray, QString> &headers) { beginResetModel(); _propertyHeaders = headers; endResetModel(); }
         
