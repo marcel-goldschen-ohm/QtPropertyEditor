@@ -151,6 +151,8 @@ namespace QtPropertyEditor
         // For convenience.
         template <class T>
         static QObject* defaultObjectCreator() { return new T(); }
+        template <class T>
+        static QObject* defaultChildObjectCreator(QObject *parent = 0) { return new T(parent); }
         
         // Model interface.
         QObject* objectAtIndex(const QModelIndex &index) const;
