@@ -44,6 +44,12 @@ namespace QtPropertyEditor
     // Get the size of a QTableView widget.
     QSize getTableSize(const QTableView *table);
     
+    // Object creators.
+    template <class T>
+    QObject* defaultObjectCreator() { return new T(); }
+    template <class T>
+    QObject* defaultChildObjectCreator(QObject *parent = 0) { return new T(parent); }
+    
     /* --------------------------------------------------------------------------------
      * Things that all QObject property models should be able to do.
      * -------------------------------------------------------------------------------- */
@@ -147,12 +153,6 @@ namespace QtPropertyEditor
         void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; endResetModel(); }
         void setPropertyHeaders(const QHash<QByteArray, QString> &headers) { beginResetModel(); _propertyHeaders = headers; endResetModel(); }
         void setObjectCreator(ObjectCreatorFunction creator) { _objectCreator = creator; }
-        
-        // For convenience.
-        template <class T>
-        static QObject* defaultObjectCreator() { return new T(); }
-        template <class T>
-        static QObject* defaultChildObjectCreator(QObject *parent = 0) { return new T(parent); }
         
         // Model interface.
         QObject* objectAtIndex(const QModelIndex &index) const;
