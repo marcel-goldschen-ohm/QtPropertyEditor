@@ -38,7 +38,7 @@ namespace QtPropertyEditor
         return propertyNames;
     }
     
-    QList<QByteArray> getDerivedPropertyNames(QObject *object)
+    QList<QByteArray> getNoninheritedPropertyNames(QObject *object)
     {
         QList<QByteArray> propertyNames = getPropertyNames(object);
         QList<QByteArray> superPropertyNames = getMetaPropertyNames(*object->metaObject()->superClass());
