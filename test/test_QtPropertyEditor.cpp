@@ -25,23 +25,12 @@ int testQtPropertyTreeEditor(int argc, char **argv)
     object.setProperty("myDynamicString", "3 amigos");
     object.setProperty("myDynamicDateTime", QDateTime::currentDateTime());
     
-    // Model.
-    QtPropertyEditor::QtPropertyTreeModel model;
-    model.setObject(&object);
-    
-    // Property names.
-    QList<QByteArray> propertyNames = QtPropertyEditor::getPropertyNames(&object);
-    propertyNames.append("child.myInt");
-    model.setPropertyNames(propertyNames);
-    
-    // Property headers.
-    QHash<QByteArray, QString> propertyHeaders;
-    propertyHeaders["objectName"] = "Name";
-    model.setPropertyHeaders(propertyHeaders);
-    
-    // Editor UI.
+    // UI.
     QtPropertyEditor::QtPropertyTreeEditor editor;
-    editor.setModel(&model);
+    editor.treeModel.propertyNames = QtPropertyEditor::getPropertyNames(&object);
+    editor.treeModel.addProperty("child.myInt");
+    editor.treeModel.propertyHeaders["objectName"] = "Name";
+    editor.treeModel.setObject(&object);
     editor.show();
     editor.resizeColumnsToContents();
     
@@ -72,32 +61,21 @@ int testQtPropertyTableEditor(int argc, char **argv)
         objects.append(object);
     }
     
-    // Model.
-    QtPropertyEditor::QtPropertyTableModel model;
-    model.setObjects(objects);
-    model.setObjectCreator(std::bind(newTestObject, &parent));
-    
-    // Property names.
-    QList<QByteArray> propertyNames = QtPropertyEditor::getMetaPropertyNames(TestObject::staticMetaObject);
-    propertyNames.append("child.myInt");
-    model.setPropertyNames(propertyNames);
-    
-    // Property headers.
-    QHash<QByteArray, QString> propertyHeaders;
-    propertyHeaders["objectName"] = "Name";
-    model.setPropertyHeaders(propertyHeaders);
-    
-    // Editor UI.
+    // UI.
     QtPropertyEditor::QtPropertyTableEditor editor;
-    editor.setModel(&model);
+    editor.tableModel.propertyNames = QtPropertyEditor::getMetaPropertyNames(TestObject::staticMetaObject);
+    editor.tableModel.addProperty("child.myInt");
+    editor.tableModel.propertyHeaders["objectName"] = "Name";
+    editor.tableModel.setChildObjects<TestObject>(&parent);
     editor.show();
     editor.resizeColumnsToContents();
     
     int status = app.exec();
     
     // Check child object order.
-    foreach(QObject *object, parent.findChildren<QObject*>(QString(), Qt::FindDirectChildrenOnly))
-    qDebug() << object->objectName();
+    foreach(QObject *object, parent.findChildren<QObject*>(QString(), Qt::FindDirectChildrenOnly)) {
+        qDebug() << object->objectName();
+    }
     
     return status;
 }

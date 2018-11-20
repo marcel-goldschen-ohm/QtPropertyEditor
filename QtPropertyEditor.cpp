@@ -5,25 +5,33 @@
 
 #include "QtPropertyEditor.h"
 
+#include <QAbstractButton>
 #include <QApplication>
 #include <QComboBox>
 #include <QEvent>
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMetaObject>
 #include <QMetaType>
 #include <QMouseEvent>
+#include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollBar>
+#include <QStylePainter>
+#include <QToolButton>
 
 namespace QtPropertyEditor
 {
+    static MetaTypeRegistration<QtPushButtonActionWrapper> thisInstantiationRegistersQtPushButtonActionWrapperWithQt;
+    
     QList<QByteArray> getPropertyNames(QObject *object)
     {
         QList<QByteArray> propertyNames = getMetaPropertyNames(*object->metaObject());
-        foreach(const QByteArray &dynamicPropertyName, object->dynamicPropertyNames())
+        foreach(const QByteArray &dynamicPropertyName, object->dynamicPropertyNames()) {
             propertyNames << dynamicPropertyName;
+        }
         return propertyNames;
     }
     
@@ -42,8 +50,9 @@ namespace QtPropertyEditor
     {
         QList<QByteArray> propertyNames = getPropertyNames(object);
         QList<QByteArray> superPropertyNames = getMetaPropertyNames(*object->metaObject()->superClass());
-        foreach(const QByteArray &superPropertyName, superPropertyNames)
+        foreach(const QByteArray &superPropertyName, superPropertyNames) {
             propertyNames.removeOne(superPropertyName);
+        }
         return propertyNames;
     }
     
@@ -74,6 +83,33 @@ namespace QtPropertyEditor
         for(int i = 0; i < table->model()->rowCount(); i++)
             h += table->rowHeight(i);
         return QSize(w, h);
+    }
+    
+    void QtAbstractPropertyModel::setProperties(const QString &str)
+    {
+        // str = "name0: header0, name1, name2, name3: header3 ..."
+        propertyNames.clear();
+        propertyHeaders.clear();
+        QStringList fields = str.split(",", QString::SkipEmptyParts);
+        foreach(const QString &field, fields) {
+            if(!field.trimmed().isEmpty())
+                addProperty(field);
+        }
+    }
+    
+    void QtAbstractPropertyModel::addProperty(const QString &str)
+    {
+        // "name" OR "name: header"
+        if(str.contains(":")) {
+            int pos = str.indexOf(":");
+            QByteArray propertyName = str.left(pos).trimmed().toUtf8();
+            QString propertyHeader = str.mid(pos+1).trimmed();
+            propertyNames.push_back(propertyName);
+            propertyHeaders[propertyName] = propertyHeader;
+        } else {
+            QByteArray propertyName = str.trimmed().toUtf8();
+            propertyNames.push_back(propertyName);
+        }
     }
     
     const QMetaProperty QtAbstractPropertyModel::metaPropertyAtIndex(const QModelIndex &index) const
@@ -201,7 +237,7 @@ namespace QtPropertyEditor
         try {
             return static_cast<Node*>(index.internalPointer());
         } catch(...) {
-            return 0;
+            return NULL;
         }
     }
     
@@ -210,10 +246,10 @@ namespace QtPropertyEditor
         // If node is an object, return the node's object.
         // Else if node is a property, return the parent node's object.
         Node *node = nodeAtIndex(index);
-        if(!node) return 0;
+        if(!node) return NULL;
         if(node->object) return node->object;
         if(node->parent) return node->parent->object;
-        return 0;
+        return NULL;
     }
     
     QByteArray QtPropertyTreeModel::propertyNameAtIndex(const QModelIndex &index) const
@@ -283,8 +319,8 @@ namespace QtPropertyEditor
                 // Object's class name or else the property name.
                 if(propertyName.isEmpty())
                     return QVariant(object->metaObject()->className());
-                else if(_propertyHeaders.contains(propertyName))
-                    return QVariant(_propertyHeaders[propertyName]);
+                else if(propertyHeaders.contains(propertyName))
+                    return QVariant(propertyHeaders[propertyName]);
                 else
                     return QVariant(propertyName);
             } else if(index.column() == 1) {
@@ -366,9 +402,9 @@ namespace QtPropertyEditor
             return 0;
         QObject *object = _objects.at(index.row());
         // If property names are specified, check if name at column is a path to a child object property.
-        if(!_propertyNames.isEmpty()) {
-            if(_propertyNames.size() > index.column()) {
-                QByteArray propertyName = _propertyNames.at(index.column());
+        if(!propertyNames.isEmpty()) {
+            if(propertyNames.size() > index.column()) {
+                QByteArray propertyName = propertyNames.at(index.column());
                 if(propertyName.contains('.')) {
                     int pos = propertyName.lastIndexOf('.');
                     return descendant(object, propertyName.left(pos));
@@ -381,9 +417,9 @@ namespace QtPropertyEditor
     QByteArray QtPropertyTableModel::propertyNameAtIndex(const QModelIndex &index) const
     {
         // If property names are specified, return the name at column.
-        if(!_propertyNames.isEmpty()) {
-            if(_propertyNames.size() > index.column()) {
-                QByteArray propertyName = _propertyNames.at(index.column());
+        if(!propertyNames.isEmpty()) {
+            if(propertyNames.size() > index.column()) {
+                QByteArray propertyName = propertyNames.at(index.column());
                 if(propertyName.contains('.')) {
                     int pos = propertyName.lastIndexOf('.');
                     return propertyName.mid(pos + 1);
@@ -425,8 +461,8 @@ namespace QtPropertyEditor
     int QtPropertyTableModel::columnCount(const QModelIndex &/* parent */) const
     {
         // Number of properties.
-        if(!_propertyNames.isEmpty())
-            return _propertyNames.size();
+        if(!propertyNames.isEmpty())
+            return propertyNames.size();
         if(_objects.isEmpty())
             return 0;
         QObject *object = _objects.at(0);
@@ -442,15 +478,15 @@ namespace QtPropertyEditor
             } else if(orientation == Qt::Horizontal) {
                 QByteArray propertyName = propertyNameAtIndex(createIndex(0, section));
                 QByteArray childPath;
-                if(_propertyNames.size() > section) {
-                    QByteArray pathToPropertyName = _propertyNames.at(section);
+                if(propertyNames.size() > section) {
+                    QByteArray pathToPropertyName = propertyNames.at(section);
                     if(pathToPropertyName.contains('.')) {
                         int pos = pathToPropertyName.lastIndexOf('.');
                         childPath = pathToPropertyName.left(pos + 1);
                     }
                 }
-                if(_propertyHeaders.contains(propertyName))
-                    return QVariant(childPath + _propertyHeaders.value(propertyName));
+                if(propertyHeaders.contains(propertyName))
+                    return QVariant(childPath + propertyHeaders.value(propertyName));
                 return QVariant(childPath + propertyName);
             }
         }
@@ -462,7 +498,7 @@ namespace QtPropertyEditor
         // Only valid if we have an object creator method.
         if(!_objectCreator)
             return false;
-        bool columnCountWillAlsoChange = _objects.isEmpty() && _propertyNames.isEmpty();
+        bool columnCountWillAlsoChange = _objects.isEmpty() && propertyNames.isEmpty();
         beginInsertRows(parent, row, row + count - 1);
         for(int i = row; i < row + count; ++i) {
             QObject *object = _objectCreator();
@@ -516,7 +552,7 @@ namespace QtPropertyEditor
             if(object) {
                 QObject *parent = object->parent();
                 if(parent) {
-                    object->setParent(0);
+                    object->setParent(NULL);
                     object->setParent(parent);
                 }
             }
@@ -530,8 +566,8 @@ namespace QtPropertyEditor
             if(value.type() == QVariant::Bool) {
                 // We want a check box, but instead of creating an editor widget we'll just directly
                 // draw the check box in paint() and handle mouse clicks in editorEvent().
-                // Here, we'll just return 0 to make sure that no editor is created when this cell is double clicked.
-                return 0;
+                // Here, we'll just return NULL to make sure that no editor is created when this cell is double clicked.
+                return NULL;
             } else if(value.type() == QVariant::Double) {
                 // Return a QLineEdit to enter double values with arbitrary precision and scientific notation.
                 QLineEdit *editor = new QLineEdit(parent);
@@ -565,6 +601,13 @@ namespace QtPropertyEditor
                 QLineEdit *editor = new QLineEdit(parent);
                 editor->setText(displayText(value, QLocale()));
                 return editor;
+            } else if(value.type() == QVariant::UserType) {
+                if(value.canConvert<QtPushButtonActionWrapper>()) {
+                    // We want a push button, but instead of creating an editor widget we'll just directly
+                    // draw the button in paint() and handle mouse clicks in editorEvent().
+                    // Here, we'll just return NULL to make sure that no editor is created when this cell is double clicked.
+                    return NULL;
+                }
             }
         }
         return QStyledItemDelegate::createEditor(parent, option, index);
@@ -824,6 +867,18 @@ namespace QtPropertyEditor
                         return;
                     }
                 }
+            } else if(value.type() == QVariant::UserType) {
+                if(value.canConvert<QtPushButtonActionWrapper>()) {
+                    QAction *action = value.value<QtPushButtonActionWrapper>().action;
+                    QStyleOptionButton buttonOption;
+                    buttonOption.state = QStyle::State_Active | QStyle::State_Raised;
+                    //buttonOption.features = QStyleOptionButton::DefaultButton;
+                    if(action) buttonOption.text = action->text();
+                    buttonOption.rect = option.rect;
+                    //buttonOption.rect = QRect(option.rect.x() + 5, option.rect.y() + 5, option.rect.width() - 10, option.rect.height() - 10);
+                    QApplication::style()->drawControl(QStyle::CE_PushButton, &buttonOption, painter);
+                    return;
+                }
             }
         }
         QStyledItemDelegate::paint(painter, option, index);
@@ -857,22 +912,27 @@ namespace QtPropertyEditor
                 if(success)
                     model->dataChanged(index.sibling(index.row(), 0), index.sibling(index.row(), model->columnCount()));
                 return success;
+            } else if(value.type() == QVariant::UserType) {
+                if(value.canConvert<QtPushButtonActionWrapper>()) {
+                    QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+                    if(mouseEvent->button() != Qt::LeftButton)
+                        return false;
+                    if(!option.rect.contains(mouseEvent->pos()))
+                        return false;
+                    QAction *action = value.value<QtPushButtonActionWrapper>().action;
+                    if(action) action->trigger();
+                    return true;
+                }
             }
         }
         return QStyledItemDelegate::editorEvent(event, model, option, index);
     }
     
-//    QtObjectPropertyEditor::QtObjectPropertyEditor(QWidget *parent) : QTableView(parent)
-//    {
-//        setItemDelegate(&_delegate);
-//        setAlternatingRowColors(true);
-//        verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-//    }
-    
     QtPropertyTreeEditor::QtPropertyTreeEditor(QWidget *parent) : QTreeView(parent)
     {
         setItemDelegate(&_delegate);
         setAlternatingRowColors(true);
+        setModel(&treeModel);
     }
     
     void QtPropertyTreeEditor::resizeColumnsToContents()
@@ -885,10 +945,12 @@ namespace QtPropertyEditor
     {
         setItemDelegate(&_delegate);
         setAlternatingRowColors(true);
+        setModel(&tableModel);
         verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+        setIsDynamic(_isDynamic);
         
         // Draggable rows.
-        verticalHeader()->setSectionsMovable(true);
+        verticalHeader()->setSectionsMovable(_isDynamic);
         connect(verticalHeader(), SIGNAL(sectionMoved(int, int, int)), this, SLOT(handleSectionMove(int, int, int)));
         
         // Header context menus.
@@ -896,6 +958,43 @@ namespace QtPropertyEditor
         verticalHeader()->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(horizontalHeader(), SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(horizontalHeaderContextMenu(QPoint)));
         connect(verticalHeader(), SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(verticalHeaderContextMenu(QPoint)));
+        
+        // Custom corner button.
+        if(QAbstractButton *cornerButton = findChild<QAbstractButton*>()) {
+            cornerButton->installEventFilter(this);
+        }
+    }
+    
+    void QtPropertyTableEditor::setIsDynamic(bool b)
+    {
+        _isDynamic = b;
+        
+        // Dragging rows.
+        verticalHeader()->setSectionsMovable(_isDynamic);
+        
+        // Corner button.
+        if(QAbstractButton *cornerButton = findChild<QAbstractButton*>()) {
+            if(_isDynamic) {
+                cornerButton->disconnect(SIGNAL(clicked()));
+                connect(cornerButton, SIGNAL(clicked()), this, SLOT(appendRow()));
+                cornerButton->setText("+");
+                cornerButton->setToolTip("Append row");
+            } else {
+                cornerButton->disconnect(SIGNAL(clicked()));
+                connect(cornerButton, SIGNAL(clicked()), this, SLOT(selectAll()));
+                cornerButton->setText("");
+                cornerButton->setToolTip("Select all");
+            }
+            // adjust the width of the vertical header to match the preferred corner button width
+            // (unfortunately QAbstractButton doesn't implement any size hinting functionality)
+            QStyleOptionHeader opt;
+            opt.text = cornerButton->text();
+            //opt.icon = cornerButton->icon();
+            QSize s = (cornerButton->style()->sizeFromContents(QStyle::CT_HeaderSection, &opt, QSize(), cornerButton).expandedTo(QApplication::globalStrut()));
+            if(s.isValid()) {
+                verticalHeader()->setMinimumWidth(s.width());
+            }
+        }
     }
     
     void QtPropertyTableEditor::horizontalHeaderContextMenu(QPoint pos)
@@ -910,61 +1009,126 @@ namespace QtPropertyEditor
     {
         QModelIndexList indexes = selectionModel()->selectedRows();
         QMenu *menu = new QMenu;
-        menu->addAction("Append Row", this, SLOT(appendRow()));
-        if(indexes.size()) {
-            menu->addSeparator();
-            menu->addAction("Insert Rows", this, SLOT(insertSelectedRows()));
-            menu->addSeparator();
-            menu->addAction("Delete Rows", this, SLOT(removeSelectedRows()));
+        if(_isDynamic) {
+            QtPropertyTableModel *propertyTableModel = qobject_cast<QtPropertyTableModel*>(model());
+            if(propertyTableModel->objectCreator()) {
+                menu->addAction("Append Row", this, SLOT(appendRow()));
+            }
+            if(indexes.size()) {
+                if(propertyTableModel->objectCreator()) {
+                    menu->addSeparator();
+                    menu->addAction("Insert Rows", this, SLOT(insertSelectedRows()));
+                    menu->addSeparator();
+                }
+                menu->addAction("Delete Rows", this, SLOT(removeSelectedRows()));
+            }
         }
         menu->popup(verticalHeader()->viewport()->mapToGlobal(pos));
     }
     
     void QtPropertyTableEditor::appendRow()
     {
+        if(!_isDynamic)
+            return;
+        QtPropertyTableModel *propertyTableModel = qobject_cast<QtPropertyTableModel*>(model());
+        if(!propertyTableModel || !propertyTableModel->objectCreator())
+            return;
         model()->insertRows(model()->rowCount(), 1);
     }
     
     void QtPropertyTableEditor::insertSelectedRows()
     {
+        if(!_isDynamic)
+            return;
+        QtPropertyTableModel *propertyTableModel = qobject_cast<QtPropertyTableModel*>(model());
+        if(!propertyTableModel || !propertyTableModel->objectCreator())
+            return;
         QModelIndexList indexes = selectionModel()->selectedRows();
         if(indexes.size() == 0)
             return;
         QList<int> rows;
-        foreach(const QModelIndex &index, indexes)
+        foreach(const QModelIndex &index, indexes) {
             rows.append(index.row());
+        }
         qSort(rows);
         model()->insertRows(rows.at(0), rows.size());
     }
     
     void QtPropertyTableEditor::removeSelectedRows()
     {
+        if(!_isDynamic)
+            return;
         QModelIndexList indexes = selectionModel()->selectedRows();
         if(indexes.size() == 0)
             return;
         QList<int> rows;
-        foreach(const QModelIndex &index, indexes)
+        foreach(const QModelIndex &index, indexes) {
             rows.append(index.row());
+        }
         qSort(rows);
-        for(int i = rows.size() - 1; i >= 0; --i)
+        for(int i = rows.size() - 1; i >= 0; --i) {
             model()->removeRows(rows.at(i), 1);
+        }
     }
     
     void QtPropertyTableEditor::handleSectionMove(int /* logicalIndex */, int oldVisualIndex, int newVisualIndex)
     {
-        if(QtPropertyTableModel *propertyModel = qobject_cast<QtPropertyTableModel*>(model())) {
-            // Move objects in the model, and then move the sections back to maintain logicalIndex order.
-            propertyModel->moveRows(QModelIndex(), oldVisualIndex, 1, QModelIndex(), newVisualIndex);
-            disconnect(verticalHeader(), SIGNAL(sectionMoved(int, int, int)), this, SLOT(handleSectionMove(int, int, int)));
-            verticalHeader()->moveSection(newVisualIndex, oldVisualIndex);
-            connect(verticalHeader(), SIGNAL(sectionMoved(int, int, int)), this, SLOT(handleSectionMove(int, int, int)));
-        }
+        if(!_isDynamic)
+            return;
+        QtPropertyTableModel *propertyTableModel = qobject_cast<QtPropertyTableModel*>(model());
+        if(!propertyTableModel)
+            return;
+        // Move objects in the model, and then move the sections back to maintain logicalIndex order.
+        propertyTableModel->moveRows(QModelIndex(), oldVisualIndex, 1, QModelIndex(), newVisualIndex);
+        disconnect(verticalHeader(), SIGNAL(sectionMoved(int, int, int)), this, SLOT(handleSectionMove(int, int, int)));
+        verticalHeader()->moveSection(newVisualIndex, oldVisualIndex);
+        connect(verticalHeader(), SIGNAL(sectionMoved(int, int, int)), this, SLOT(handleSectionMove(int, int, int)));
     }
     
     void QtPropertyTableEditor::keyPressEvent(QKeyEvent *event)
     {
-        if(event->key() == Qt::Key_Plus)
-            appendRow();
+        switch(event->key()) {
+            case Qt::Key_Backspace:
+            case Qt::Key_Delete:
+                if(_isDynamic && QMessageBox::question(this, "Delete Rows?", "Delete selected rows?", QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
+                    removeSelectedRows();
+                }
+                break;
+                
+            case Qt::Key_Plus:
+                appendRow();
+                break;
+                
+            default:
+                break;
+        }
+    }
+    
+    bool QtPropertyTableEditor::eventFilter(QObject* o, QEvent* e)
+    {
+        if (e->type() == QEvent::Paint) {
+            if(QAbstractButton *btn = qobject_cast<QAbstractButton*>(o)) {
+                // paint by hand (borrowed from QTableCornerButton)
+                QStyleOptionHeader opt;
+                opt.init(btn);
+                QStyle::State styleState = QStyle::State_None;
+                if (btn->isEnabled())
+                    styleState |= QStyle::State_Enabled;
+                if (btn->isActiveWindow())
+                    styleState |= QStyle::State_Active;
+                if (btn->isDown())
+                    styleState |= QStyle::State_Sunken;
+                opt.state = styleState;
+                opt.rect = btn->rect();
+                opt.text = btn->text(); // this line is the only difference to QTableCornerButton
+                //opt.icon = btn->icon(); // this line is the only difference to QTableCornerButton
+                opt.position = QStyleOptionHeader::OnlyOneSection;
+                QStylePainter painter(btn);
+                painter.drawControl(QStyle::CE_Header, opt);
+                return true; // eat event
+            }
+        }
+        return false;
     }
     
 } // QtPropertyEditor

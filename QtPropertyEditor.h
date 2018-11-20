@@ -11,6 +11,7 @@
 #include <functional>
 
 #include <QAbstractItemModel>
+#include <QAction>
 #include <QByteArray>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -44,12 +45,6 @@ namespace QtPropertyEditor
     // Get the size of a QTableView widget.
     QSize getTableSize(const QTableView *table);
     
-    // Object creators.
-    template <class T>
-    QObject* defaultObjectCreator() { return new T(); }
-    template <class T>
-    QObject* defaultChildObjectCreator(QObject *parent = 0) { return new T(parent); }
-    
     /* --------------------------------------------------------------------------------
      * Things that all QObject property models should be able to do.
      * -------------------------------------------------------------------------------- */
@@ -59,6 +54,11 @@ namespace QtPropertyEditor
         
     public:
         QtAbstractPropertyModel(QObject *parent = 0) : QAbstractItemModel(parent) {}
+        
+        QList<QByteArray> propertyNames;
+        QHash<QByteArray, QString> propertyHeaders;
+        void setProperties(const QString &str);
+        void addProperty(const QString &str);
         
         virtual QObject* objectAtIndex(const QModelIndex &index) const = 0;
         virtual QByteArray propertyNameAtIndex(const QModelIndex &index) const = 0;
@@ -81,32 +81,30 @@ namespace QtPropertyEditor
         struct Node
         {
             // Node traversal.
-            Node *parent;
+            Node *parent = NULL;
             QList<Node*> children;
             
             // Node data.
-            QObject *object;
+            QObject *object = NULL;
             QByteArray propertyName;
             
-            Node(Node *parent = 0) : parent(parent), object(0) {}
+            Node(Node *parent = NULL) : parent(parent) {}
             ~Node() { qDeleteAll(children); }
             
             void setObject(QObject *object, int maxChildDepth = -1, const QList<QByteArray> &propertyNames = QList<QByteArray>());
         };
         
-        QtPropertyTreeModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _maxTreeDepth(-1) {}
+        QtPropertyTreeModel(QObject *parent = NULL) : QtAbstractPropertyModel(parent) {}
         
         // Getters.
         QObject* object() const { return _root.object; }
         int maxDepth() const { return _maxTreeDepth; }
-        QList<QByteArray> propertyNames() const { return _propertyNames; }
-        QHash<QByteArray, QString> propertyHeaders() const { return _propertyHeaders; }
         
         // Setters.
-        void setObject(QObject *object) { beginResetModel(); _root.setObject(object, _maxTreeDepth, _propertyNames); endResetModel(); }
-        void setMaxDepth(int i) { beginResetModel(); _maxTreeDepth = i; setObject(object()); endResetModel(); }
-        void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; setObject(object()); endResetModel(); }
-        void setPropertyHeaders(const QHash<QByteArray, QString> &headers) { beginResetModel(); _propertyHeaders = headers; endResetModel(); }
+        void setObject(QObject *object) { beginResetModel(); _root.setObject(object, _maxTreeDepth, propertyNames); endResetModel(); }
+        void setMaxDepth(int i) { beginResetModel(); _maxTreeDepth = i; reset(); endResetModel(); }
+        void setProperties(const QString &str) { beginResetModel(); QtAbstractPropertyModel::setProperties(str); reset(); endResetModel(); }
+        void addProperty(const QString &str) { beginResetModel(); QtAbstractPropertyModel::addProperty(str); reset(); endResetModel(); }
         
         // Model interface.
         Node* nodeAtIndex(const QModelIndex &index) const;
@@ -121,11 +119,12 @@ namespace QtPropertyEditor
         Qt::ItemFlags flags(const QModelIndex &index) const;
         QVariant headerData(int section, Qt::Orientation orientation, int role) const;
         
+    public slots:
+        void reset() { setObject(object()); }
+        
     protected:
         Node _root;
-        int _maxTreeDepth;
-        QList<QByteArray> _propertyNames;
-        QHash<QByteArray, QString> _propertyHeaders;
+        int _maxTreeDepth = -1;
     };
     
     /* --------------------------------------------------------------------------------
@@ -138,21 +137,21 @@ namespace QtPropertyEditor
     public:
         typedef std::function<QObject*()> ObjectCreatorFunction;
         
-        QtPropertyTableModel(QObject *parent = 0) : QtAbstractPropertyModel(parent), _objectCreator(0) {}
+        QtPropertyTableModel(QObject *parent = NULL) : QtAbstractPropertyModel(parent) {}
         
         // Getters.
         QObjectList objects() const { return _objects; }
-        QList<QByteArray> propertyNames() const { return _propertyNames; }
-        QHash<QByteArray, QString> propertyHeaders() const { return _propertyHeaders; }
         ObjectCreatorFunction objectCreator() const { return _objectCreator; }
         
         // Setters.
         void setObjects(const QObjectList &objects) { beginResetModel(); _objects = objects; endResetModel(); }
         template <class T>
         void setObjects(const QList<T*> &objects);
-        void setPropertyNames(const QList<QByteArray> &names) { beginResetModel(); _propertyNames = names; endResetModel(); }
-        void setPropertyHeaders(const QHash<QByteArray, QString> &headers) { beginResetModel(); _propertyHeaders = headers; endResetModel(); }
+        template <class T>
+        void setChildObjects(QObject *parent);
         void setObjectCreator(ObjectCreatorFunction creator) { _objectCreator = creator; }
+        void setProperties(const QString &str) { beginResetModel(); QtAbstractPropertyModel::setProperties(str); endResetModel(); }
+        void addProperty(const QString &str) { beginResetModel(); QtAbstractPropertyModel::addProperty(str); endResetModel(); }
         
         // Model interface.
         QObject* objectAtIndex(const QModelIndex &index) const;
@@ -167,15 +166,20 @@ namespace QtPropertyEditor
         bool moveRows(const QModelIndex &sourceParent, int sourceRow, int count, const QModelIndex &destinationParent, int destinationRow);
         void reorderChildObjectsToMatchRowOrder(int firstRow = 0);
         
+        // Default creator functions for convenience.
+        // Requires template class T to implement a default constructor T().
+        template <class T>
+        static QObject* defaultCreator() { return new T(); }
+        template <class T>
+        static QObject* defaultChildCreator(QObject *parent) { T *object = new T(); object->setParent(parent); return object; }
+        
     signals:
         void rowCountChanged();
         void rowOrderChanged();
         
     protected:
         QObjectList _objects;
-        QList<QByteArray> _propertyNames;
-        QHash<QByteArray, QString> _propertyHeaders;
-        ObjectCreatorFunction _objectCreator;
+        ObjectCreatorFunction _objectCreator = NULL;
     };
     
     template <class T>
@@ -187,6 +191,19 @@ namespace QtPropertyEditor
             if(QObject *obj = qobject_cast<QObject*>(object))
                 _objects.append(obj);
         }
+        endResetModel();
+    }
+    
+    template <class T>
+    void QtPropertyTableModel::setChildObjects(QObject *parent)
+    {
+        beginResetModel();
+        _objects.clear();
+        foreach(T *derivedObject, parent->findChildren<T*>(QString(), Qt::FindDirectChildrenOnly)) {
+            if(QObject *object = qobject_cast<QObject*>(derivedObject))
+                _objects.append(object);
+        }
+        _objectCreator = std::bind(&QtPropertyTableModel::defaultChildCreator<T>, parent);
         endResetModel();
     }
     
@@ -209,6 +226,33 @@ namespace QtPropertyEditor
     };
     
     /* --------------------------------------------------------------------------------
+     * User types for QVariant that will be handled by QtPropertyDelegate.
+     * User types need to be declared via Q_DECLARE_METATYPE (see below outside of namespace)
+     *   and also registered via qRegisterMetaType (see static instantiation in .cpp file)
+     * -------------------------------------------------------------------------------- */
+    
+    // For static registration of user types (see static instantiation in QtPropertyEditor.cpp).
+    template <typename Type> class MetaTypeRegistration
+    {
+    public:
+        inline MetaTypeRegistration()
+        {
+            qRegisterMetaType<Type>();
+        }
+    };
+    
+    // For push buttons.
+    // See Q_DECLARE_METATYPE below and qRegisterMetaType in .cpp file.
+    class QtPushButtonActionWrapper
+    {
+    public:
+        QtPushButtonActionWrapper(QAction *action = NULL) : action(action) {}
+        QtPushButtonActionWrapper(const QtPushButtonActionWrapper &other) { action = other.action; }
+        ~QtPushButtonActionWrapper() {}
+        QAction *action = NULL;
+    };
+    
+    /* --------------------------------------------------------------------------------
      * Tree editor for properties in a QObject tree.
      * -------------------------------------------------------------------------------- */
     class QtPropertyTreeEditor : public QTreeView
@@ -216,7 +260,11 @@ namespace QtPropertyEditor
         Q_OBJECT
         
     public:
-        QtPropertyTreeEditor(QWidget *parent = 0);
+        QtPropertyTreeEditor(QWidget *parent = NULL);
+        
+        // Owns its own tree model for convenience. This means model will be deleted along with editor.
+        // However, you're not forced to use this model.
+        QtPropertyTreeModel treeModel;
         
     public slots:
         void resizeColumnsToContents();
@@ -234,7 +282,14 @@ namespace QtPropertyEditor
         Q_OBJECT
         
     public:
-        QtPropertyTableEditor(QWidget *parent = 0);
+        QtPropertyTableEditor(QWidget *parent = NULL);
+        
+        // Owns its own table model for convenience. This means model will be deleted along with editor.
+        // However, you're not forced to use this model.
+        QtPropertyTableModel tableModel;
+        
+        bool isDynamic() const { return _isDynamic; }
+        void setIsDynamic(bool b);
         
         QSize sizeHint() const Q_DECL_OVERRIDE { return getTableSize(this); }
         
@@ -248,10 +303,14 @@ namespace QtPropertyEditor
         
     protected:
         QtPropertyDelegate _delegate;
+        bool _isDynamic = true;
         
         void keyPressEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
+        bool eventFilter(QObject* o, QEvent* e) Q_DECL_OVERRIDE;
     };
     
 } // QtPropertyEditor
+
+Q_DECLARE_METATYPE(QtPropertyEditor::QtPushButtonActionWrapper);
 
 #endif // __QtPropertyEditor_H__
