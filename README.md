@@ -13,6 +13,7 @@ UI property editors for QObject-derived classes.
     * QSize/QSizeF: QLineEdit for text format *(w x h)*
     * QPoint/QPointF: QLineEdit for text format *(x, y)*
     * QRect/QRectF: QLineEdit for text format *[(x, y) w x h]*
+    * Handles QPushButton actions.
 
 **Author**: Marcel Goldschen-Ohm  
 **Email**:  <marcel.goldschen@gmail.com>  
