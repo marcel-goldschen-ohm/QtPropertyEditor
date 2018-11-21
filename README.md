@@ -13,6 +13,7 @@ UI property editors for QObject-derived classes.
     * QSize/QSizeF: QLineEdit for text format *(w x h)*
     * QPoint/QPointF: QLineEdit for text format *(x, y)*
     * QRect/QRectF: QLineEdit for text format *[(x, y) w x h]*
+    * Handles QPushButton actions.
 
 **Author**: Marcel Goldschen-Ohm  
 **Email**:  <marcel.goldschen@gmail.com>  
@@ -73,24 +74,28 @@ model.setObject(&object);
 **[Optional]** You can define which properties to expose in the editor (default includes all properties including dynamic properties). For example, if we only wanted to show the "objectName" and "myInt" properties:
     
 ```cpp
-QList<QByteArray> propertyNames;
-propertyNames << "objectName" << "myInt";
-model.setPropertyNames(propertyNames);
+model.setProperties("objectName, myInt");
+model.addProperty("myDouble");
 ```
 
-**[Optional]** You can map property names to headers that will be displayed instead of the property name. Usually, this is when you want some nonstandard charachters to be displayed that are not allowed to be part of the property name. For example, if we wanted to the "objectName" property to be displayed as if it was the "Name" property instead:
+**[Optional]** You can map property names to headers that will be displayed instead of the property name. Usually, this is when you want some nonstandard charachters to be displayed that are not allowed to be part of the property name. For example, if we wanted the "objectName" property to be displayed as if it was the "Name" property instead:
 
 ```cpp
-QHash<QByteArray, QString> propertyHeaders;
-propertyHeaders["objectName"] = "Name";
-model.setPropertyHeaders(propertyHeaders);
+model.propertyHeaders["objectName"] = "Name";
 ```
 
-The tree view UI editor linked to our object's model interface.
+You can also specify property headers in the `setProperties` or `addProperty` functions by including "name: header" string pairs:
+
+```cpp
+model.setProperties("objectName: Name, myInt");
+model.addProperty("myDouble: My Cool Double");
+```
+
+The tree view UI editor linked to our object's model interface. **Note: The editor owns its own tree model that it is linked to by default and which will be deleted along with the editor. However, you are free to link the editor to another model via `setModel()` if you want to.**
 
 ```cpp
 QtPropertyEditor::QtPropertyTreeEditor editor;
-editor.setModel(&model);
+editor.setModel(&model); // OR do NOT call this to use the default editor.treeModel model.
 ```
 
 Show the editor and run the application.
@@ -151,16 +156,14 @@ model.setObjectCreator(func);
 **[Optional]** Default is a flat editor for each object's properties excluding properties of child objects. However, specific child object properties can be made available in the table view by adding *"path.to.child.property"* to the specified list of property names to be displayed. In this case, *path*, *to* and *child* are the object names of a child object tree, and *property* is a property name for *child*. Note that for this to make sense all objects in the list should have a valid *"path.to.child.property"*. For example, to expose the "myInt" property of the child object named "child":
     
 ```cpp
-QList<QByteArray> propertyNames;
-propertyNames << "child.myInt";
-model.setPropertyNames(propertyNames);
+model.addProperty("child.myInt");
 ```
 
-The table view UI editor linked to the model interface for our list of objects.
+The table view UI editor linked to the model interface for our list of objects. **Note: The editor owns its own table model that it is linked to by default and which will be deleted along with the editor. However, you are free to link the editor to another model via `setModel()` if you want to.**
 
 ```cpp
 QtPropertyEditor::QtPropertyTableEditor editor;
-editor.setModel(&model);
+editor.setModel(&model); // OR do NOT call this to use the default editor.tableModel model.
 ```
 
 Show the editor and run the application.
