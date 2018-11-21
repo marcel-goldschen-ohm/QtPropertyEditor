@@ -377,7 +377,7 @@ namespace QtPropertyEditor
         if(index.column() == 1) {
             QByteArray propertyName = propertyNameAtIndex(index);
             const QMetaProperty metaProperty = metaPropertyAtIndex(index);
-            if(metaProperty.isWritable() || object->dynamicPropertyNames().contains(propertyName))
+            if(metaProperty.isWritable() || object->dynamicPropertyNames().contains(propertyName) || objectAtIndex(index))
                 flags |= Qt::ItemIsEditable;
         }
         return flags;
