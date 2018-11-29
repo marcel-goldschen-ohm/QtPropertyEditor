@@ -8,6 +8,7 @@
 #include "test_QtPropertyEditor.h"
 
 #include <QApplication>
+#include <QDebug>
 
 #include "QtPropertyEditor.h"
 

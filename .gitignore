@@ -1,5 +1,13 @@
-# MacOSX
+# CMake
+CMakeFiles/
+CMakeScripts/
+_deps/
+*_autogen/
+*.build/
+CMakeCache.txt
+*.cmake
 
+# MacOSX
 .DS_Store
 *.xcodeproj/
 *.build/
@@ -10,11 +18,8 @@ Info.plist
 project.pbxproj
 project.xcworkspace
 xcshareddata/
-qt_makeqmake.mak
-qt_preprocess.mak
 
-# C++ objects and libs
-
+# C++
 *.slo
 *.lo
 *.o
@@ -26,7 +31,6 @@ qt_preprocess.mak
 *.dylib
 
 # Qt-es
-
 .qmake.cache
 .qmake.stash
 *.pro.user
@@ -40,9 +44,9 @@ qrc_*.cpp
 ui_*.h
 Makefile*
 *build-*
+*.mak
 
 # QtCreator
-
 *.autosave
 
 # QtCtreator Qml

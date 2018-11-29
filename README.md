@@ -39,6 +39,12 @@ Everything is in:
 * `QtPropertyEditor.h`
 * `QtPropertyEditor.cpp`
 
+### CMake:
+
+See `CMakeLists.txt` for example build as a static library.
+
+:point_right: **This is most likely what you want:** See `test/CMakeLists.txt` for example build of an app that uses QtPropertyEditor. This build uses CMake to automatically download QtPropertyEditor files directly from this GitHub repository, builds QtPropertyEditor as a static library and links it to the app executable. This way you can use QtPropertyEditor in your project without downloading or managing the QtPropertyEditor repository manually.
+
 ### Requires:
 
 * [Qt](http://www.qt.io)
