@@ -8,6 +8,8 @@
 #include <QAbstractButton>
 #include <QApplication>
 #include <QComboBox>
+#include <QDateTimeEdit>
+#include <QDoubleSpinBox>
 #include <QEvent>
 #include <QHeaderView>
 #include <QLineEdit>
@@ -20,6 +22,7 @@
 #include <QRegularExpression>
 #include <QScrollBar>
 #include <QSpacerItem>
+#include <QSpinBox>
 #include <QStylePainter>
 #include <QToolButton>
 
@@ -168,7 +171,10 @@ namespace QtPropertyEditor
             // Result will be FALSE for dynamic properties, which causes the tree view to lag.
             // So make sure we still return TRUE in this case.
             if(!result && object->dynamicPropertyNames().contains(propertyName))
-                return true;
+                result = true;
+            // Let the model refresh any cells that depend on the changed value (e.g. read-only mirrors).
+            if(result)
+                refreshAfterChange(index);
             return result;
         }
         return false;
@@ -356,18 +362,32 @@ namespace QtPropertyEditor
                 // Object's objectName or else the property value.
                 if(propertyName.isEmpty()) {
                     object->setObjectName(value.toString());
+                    refreshAfterChange(index);
                     return true;
                 } else {
                     bool result = object->setProperty(propertyName.constData(), value);
                     // Result will be FALSE for dynamic properties, which causes the tree view to lag.
                     // So make sure we still return TRUE in this case.
                     if(!result && object->dynamicPropertyNames().contains(propertyName))
-                        return true;
+                        result = true;
+                    // Refresh sibling properties (e.g. read-only mirrors of the changed property).
+                    if(result)
+                        refreshAfterChange(index);
                     return result;
                 }
             }
         }
         return false;
+    }
+    
+    void QtPropertyTreeModel::refreshAfterChange(const QModelIndex &index)
+    {
+        // All properties of an object are siblings under the same parent node, so refresh them all.
+        QModelIndex parentIndex = index.parent();
+        int rows = rowCount(parentIndex);
+        int cols = columnCount(parentIndex);
+        if(rows > 0 && cols > 0)
+            emit dataChanged(this->index(0, 0, parentIndex), this->index(rows - 1, cols - 1, parentIndex));
     }
     
     Qt::ItemFlags QtPropertyTreeModel::flags(const QModelIndex &index) const
@@ -499,6 +519,14 @@ namespace QtPropertyEditor
         return QVariant();
     }
     
+    void QtPropertyTableModel::refreshAfterChange(const QModelIndex &index)
+    {
+        // All properties of an object are the columns of one row, so refresh the whole row.
+        int cols = columnCount();
+        if(index.row() >= 0 && cols > 0)
+            emit dataChanged(createIndex(index.row(), 0), createIndex(index.row(), cols - 1));
+    }
+    
     bool QtPropertyTableModel::insertRows(int row, int count, const QModelIndex &parent)
     {
         // Only valid if we have an object creator method.
@@ -565,6 +593,44 @@ namespace QtPropertyEditor
         }
     }
 
+    // True if the editor (or one of its child widgets, e.g. the line edit inside a spin box)
+    // currently has the keyboard focus, i.e. a change is coming from the user.
+    static bool editorHasFocus(QWidget *editor)
+    {
+        QWidget *fw = QApplication::focusWidget();
+        return editor && fw && (editor == fw || editor->isAncestorOf(fw));
+    }
+    
+    void QtPropertyDelegate::connectLiveCommit(QWidget *editor) const
+    {
+        if(!editor)
+            return;
+        // commitData() is a signal, which we need to emit from this const method.
+        QtPropertyDelegate *self = const_cast<QtPropertyDelegate*>(this);
+        
+        if(QLineEdit *e = qobject_cast<QLineEdit*>(editor)) {
+            // textEdited is only emitted for user edits (not for programmatic setText()).
+            connect(e, &QLineEdit::textEdited, self, [self, e]() { emit self->commitData(e); });
+        } else if(QComboBox *e = qobject_cast<QComboBox*>(editor)) {
+            connect(e, QOverload<int>::of(&QComboBox::activated), self, [self, e]() { emit self->commitData(e); });
+        } else if(QSpinBox *e = qobject_cast<QSpinBox*>(editor)) {
+            e->setKeyboardTracking(true);
+            connect(e, QOverload<int>::of(&QSpinBox::valueChanged), self, [self, e]() {
+                if(editorHasFocus(e)) emit self->commitData(e);
+            });
+        } else if(QDoubleSpinBox *e = qobject_cast<QDoubleSpinBox*>(editor)) {
+            e->setKeyboardTracking(true);
+            connect(e, QOverload<double>::of(&QDoubleSpinBox::valueChanged), self, [self, e]() {
+                if(editorHasFocus(e)) emit self->commitData(e);
+            });
+        } else if(QDateTimeEdit *e = qobject_cast<QDateTimeEdit*>(editor)) {
+            // Also covers QDateEdit and QTimeEdit.
+            connect(e, &QDateTimeEdit::dateTimeChanged, self, [self, e]() {
+                if(editorHasFocus(e)) emit self->commitData(e);
+            });
+        }
+    }
+
     QWidget* QtPropertyDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const
     {
         QVariant value = index.data(Qt::DisplayRole);
@@ -580,6 +646,8 @@ namespace QtPropertyEditor
                         for(int j = 0; j < metaEnum.keyCount(); ++j)
                             editor->addItem(QString::fromLatin1(metaEnum.key(j)), metaEnum.value(j));
                         editor->setCurrentIndex(editor->findData(value.toInt()));
+                        // Commit selected value immediately on selection.
+                        connectLiveCommit(editor);
                         return editor;
                     }
                 }
@@ -592,6 +660,7 @@ namespace QtPropertyEditor
                 // Return a QLineEdit to enter double values with arbitrary precision and scientific notation.
                 QLineEdit *editor = new QLineEdit(parent);
                 editor->setText(value.toString());
+                connectLiveCommit(editor);
                 return editor;
             } else if(value.typeId() == QMetaType::QSize ||
                        value.typeId() == QMetaType::QSizeF ||
@@ -602,6 +671,7 @@ namespace QtPropertyEditor
                 // Return a QLineEdit. Parsing will be done in displayText() and setEditorData().
                 QLineEdit *editor = new QLineEdit(parent);
                 editor->setText(displayText(value, QLocale()));
+                connectLiveCommit(editor);
                 return editor;
             } else if(value.canConvert<QtPushButtonActionWrapper>()) {
                 // We want a push button, but instead of creating an editor widget we'll just directly
@@ -610,11 +680,22 @@ namespace QtPropertyEditor
                 return NULL;
             }
         }
-        return QStyledItemDelegate::createEditor(parent, option, index);
+        // Default editors (QLineEdit for strings, QSpinBox for ints, QDateTimeEdit for date/times, ...).
+        QWidget *editor = QStyledItemDelegate::createEditor(parent, option, index);
+        connectLiveCommit(editor);
+        return editor;
     }
     
     void QtPropertyDelegate::setEditorData(QWidget *editor, const QModelIndex &index) const
     {
+        // With live commits, every edit makes the model emit dataChanged(), which makes the view call
+        // setEditorData() on the editor that is currently being typed in. Re-populating it would reset
+        // the text/cursor position, so skip editors that have (or contain) the keyboard focus.
+        // The editor already holds the newest value anyway, since it is the source of the change.
+        // On creation the editor does not have focus yet, so it is still populated initially.
+        QWidget *focusWidget = QApplication::focusWidget();
+        if(editor && focusWidget && (editor == focusWidget || editor->isAncestorOf(focusWidget)))
+            return;
         QStyledItemDelegate::setEditorData(editor, index);
     }
     
@@ -639,6 +720,7 @@ namespace QtPropertyEditor
             } else if(value.typeId() == QMetaType::Double) {
                 // Set model's double value data to numeric representation in QLineEdit editor.
                 // Conversion from text to number handled by QVariant.
+                // Half-typed text such as "1e-" does not parse and is simply ignored until it becomes valid.
                 QLineEdit *lineEditor = qobject_cast<QLineEdit*>(editor);
                 if(lineEditor) {
                     QVariant value = QVariant(lineEditor->text());
@@ -661,6 +743,7 @@ namespace QtPropertyEditor
                         if(wok && hok)
                             model->setData(index, QVariant(QSize(w, h)), Qt::EditRole);
                     }
+                    return;
                 }
             } else if(value.typeId() == QMetaType::QSizeF) {
                 QLineEdit *lineEditor = qobject_cast<QLineEdit*>(editor);
@@ -675,6 +758,7 @@ namespace QtPropertyEditor
                         if(wok && hok)
                             model->setData(index, QVariant(QSizeF(w, h)), Qt::EditRole);
                     }
+                    return;
                 }
             } else if(value.typeId() == QMetaType::QPoint) {
                 QLineEdit *lineEditor = qobject_cast<QLineEdit*>(editor);
@@ -689,6 +773,7 @@ namespace QtPropertyEditor
                         if(xok && yok)
                             model->setData(index, QVariant(QPoint(x, y)), Qt::EditRole);
                     }
+                    return;
                 }
             } else if(value.typeId() == QMetaType::QPointF) {
                 QLineEdit *lineEditor = qobject_cast<QLineEdit*>(editor);
@@ -703,6 +788,7 @@ namespace QtPropertyEditor
                         if(xok && yok)
                             model->setData(index, QVariant(QPointF(x, y)), Qt::EditRole);
                     }
+                    return;
                 }
             } else if(value.typeId() == QMetaType::QRect) {
                 QLineEdit *lineEditor = qobject_cast<QLineEdit*>(editor);
@@ -725,6 +811,7 @@ namespace QtPropertyEditor
                         if(xok && yok && wok && hok)
                             model->setData(index, QVariant(QRect(x, y, w, h)), Qt::EditRole);
                     }
+                    return;
                 }
             } else if(value.typeId() == QMetaType::QRectF) {
                 QLineEdit *lineEditor = qobject_cast<QLineEdit*>(editor);
@@ -747,6 +834,7 @@ namespace QtPropertyEditor
                         if(xok && yok && wok && hok)
                             model->setData(index, QVariant(QRectF(x, y, w, h)), Qt::EditRole);
                     }
+                    return;
                 }
     //        } else if(value.type() == QVariant::Color) {
     //            QLineEdit *lineEditor = qobject_cast<QLineEdit*>(editor);
@@ -884,29 +972,17 @@ namespace QtPropertyEditor
                 QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
                 if(mouseEvent->button() != Qt::LeftButton)
                     return false;
-                //QStyleOptionButton buttonOption;
-                //QRect checkBoxRect = QApplication::style()->subElementRect(QStyle::SE_CheckBoxIndicator, &buttonOption); // Only used to get size of native checkbox widget.
-                //buttonOption.rect = QStyle::alignedRect(option.direction, Qt::AlignLeft, checkBoxRect.size(), option.rect); // Our checkbox rect.
                 // option.rect ==> cell
-                // buttonOption.rect ==> check box
                 // Here, we choose to allow clicks anywhere in the cell to toggle the checkbox.
                 if(!option.rect.contains(mouseEvent->pos()))
                     return false;
                 bool checked = value.toBool();
                 QVariant newValue(!checked); // Toggle model's bool value.
-                bool success = model->setData(index, newValue, Qt::EditRole);
-                // Refresh all property rows belonging to the same parent object, since a bool property may
-                // be mirrored by another property of the same object (e.g. a read-only property
-                // backed by the same underlying value) that also needs to reflect the new state.
-                if(success) {
-                    QModelIndex parent = index.parent();
-                    int rows = model->rowCount(parent);
-                    int cols = model->columnCount(parent);
-                    if(rows > 0 && cols > 0)
-                        emit model->dataChanged(model->index(0, 0, parent), model->index(rows - 1, cols - 1, parent));
-                }
-                return success;
+                // The model refreshes all dependent cells (e.g. read-only mirrors) in setData().
+                return model->setData(index, newValue, Qt::EditRole);
             } else if(value.canConvert<QtPushButtonActionWrapper>()) {
+                if(event->type() != QEvent::MouseButtonRelease)
+                    return false;
                 QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
                 if(mouseEvent->button() != Qt::LeftButton)
                     return false;
@@ -925,6 +1001,7 @@ namespace QtPropertyEditor
         setItemDelegate(&_delegate);
         setAlternatingRowColors(true);
         setModel(&treeModel);
+        setEditTriggers(QAbstractItemView::AllEditTriggers);
     }
     
     void QtPropertyTreeEditor::resizeColumnsToContents()
@@ -938,6 +1015,7 @@ namespace QtPropertyEditor
         setItemDelegate(&_delegate);
         setAlternatingRowColors(true);
         setModel(&tableModel);
+        setEditTriggers(QAbstractItemView::AllEditTriggers);
         verticalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
         setIsDynamic(_isDynamic);
         
