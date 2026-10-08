@@ -66,6 +66,12 @@ namespace QtPropertyEditor
         virtual QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
         virtual bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole);
         virtual Qt::ItemFlags flags(const QModelIndex &index) const;
+        
+    protected:
+        // Called after a property was successfully changed via setData().
+        // Derived models emit dataChanged() for all cells that may depend on the changed value
+        // (e.g. read-only properties that mirror a writable one).
+        virtual void refreshAfterChange(const QModelIndex &/* index */) {}
     };
     
     /* --------------------------------------------------------------------------------
@@ -102,27 +108,29 @@ namespace QtPropertyEditor
         
         // Setters.
         void setObject(QObject *object) { beginResetModel(); _root.setObject(object, _maxTreeDepth, propertyNames); endResetModel(); }
-        void setMaxDepth(int i) { beginResetModel(); _maxTreeDepth = i; reset(); endResetModel(); }
-        void setProperties(const QString &str) { beginResetModel(); QtAbstractPropertyModel::setProperties(str); reset(); endResetModel(); }
-        void addProperty(const QString &str) { beginResetModel(); QtAbstractPropertyModel::addProperty(str); reset(); endResetModel(); }
+        void setMaxDepth(int i) { _maxTreeDepth = i; reset(); }
+        void setProperties(const QString &str) { QtAbstractPropertyModel::setProperties(str); reset(); }
+        void addProperty(const QString &str) { QtAbstractPropertyModel::addProperty(str); reset(); }
         
         // Model interface.
         Node* nodeAtIndex(const QModelIndex &index) const;
-        QObject* objectAtIndex(const QModelIndex &index) const;
-        QByteArray propertyNameAtIndex(const QModelIndex &index) const;
-        QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const;
-        QModelIndex parent(const QModelIndex &index) const;
-        int rowCount(const QModelIndex &parent = QModelIndex()) const;
-        int columnCount(const QModelIndex &parent = QModelIndex()) const;
-        QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const;
-        bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole);
-        Qt::ItemFlags flags(const QModelIndex &index) const;
-        QVariant headerData(int section, Qt::Orientation orientation, int role) const;
+        QObject* objectAtIndex(const QModelIndex &index) const override;
+        QByteArray propertyNameAtIndex(const QModelIndex &index) const override;
+        QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const override;
+        QModelIndex parent(const QModelIndex &index) const override;
+        int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+        int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+        QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+        bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) override;
+        Qt::ItemFlags flags(const QModelIndex &index) const override;
+        QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
         
     public slots:
-        void reset() { setObject(object()); }
+        void reset() { beginResetModel(); _root.setObject(object(), _maxTreeDepth, propertyNames); endResetModel(); }
         
     protected:
+        void refreshAfterChange(const QModelIndex &index) override;
+        
         Node _root;
         int _maxTreeDepth = -1;
     };
@@ -154,16 +162,16 @@ namespace QtPropertyEditor
         void addProperty(const QString &str) { beginResetModel(); QtAbstractPropertyModel::addProperty(str); endResetModel(); }
         
         // Model interface.
-        QObject* objectAtIndex(const QModelIndex &index) const;
-        QByteArray propertyNameAtIndex(const QModelIndex &index) const;
-        QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const;
-        QModelIndex parent(const QModelIndex &index) const;
-        int rowCount(const QModelIndex &parent = QModelIndex()) const;
-        int columnCount(const QModelIndex &parent = QModelIndex()) const;
-        QVariant headerData(int section, Qt::Orientation orientation, int role) const;
-        bool insertRows(int row, int count, const QModelIndex &parent = QModelIndex());
-        bool removeRows(int row, int count, const QModelIndex &parent = QModelIndex());
-        bool moveRows(const QModelIndex &sourceParent, int sourceRow, int count, const QModelIndex &destinationParent, int destinationRow);
+        QObject* objectAtIndex(const QModelIndex &index) const override;
+        QByteArray propertyNameAtIndex(const QModelIndex &index) const override;
+        QModelIndex index(int row, int column, const QModelIndex &parent = QModelIndex()) const override;
+        QModelIndex parent(const QModelIndex &index) const override;
+        int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+        int columnCount(const QModelIndex &parent = QModelIndex()) const override;
+        QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
+        bool insertRows(int row, int count, const QModelIndex &parent = QModelIndex()) override;
+        bool removeRows(int row, int count, const QModelIndex &parent = QModelIndex()) override;
+        bool moveRows(const QModelIndex &sourceParent, int sourceRow, int count, const QModelIndex &destinationParent, int destinationRow) override;
         void reorderChildObjectsToMatchRowOrder(int firstRow = 0);
         
         // Default creator functions for convenience.
@@ -178,6 +186,8 @@ namespace QtPropertyEditor
         void rowOrderChanged();
         
     protected:
+        void refreshAfterChange(const QModelIndex &index) override;
+        
         QObjectList _objects;
         ObjectCreatorFunction _objectCreator = NULL;
     };
@@ -209,20 +219,26 @@ namespace QtPropertyEditor
     
     /* --------------------------------------------------------------------------------
      * Property editor delegate.
+     * Editors commit their value to the model on every change (live update), not only
+     * when the editor is closed.
      * -------------------------------------------------------------------------------- */
     class QtPropertyDelegate: public QStyledItemDelegate
     {
     public:
         QtPropertyDelegate(QWidget *parent = 0) : QStyledItemDelegate(parent) {}
         
-        QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const Q_DECL_OVERRIDE;
-        void setEditorData(QWidget *editor, const QModelIndex &index) const Q_DECL_OVERRIDE;
-        void setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const Q_DECL_OVERRIDE;
-        QString displayText(const QVariant &value, const QLocale &locale) const Q_DECL_OVERRIDE;
-        void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const Q_DECL_OVERRIDE;
+        QWidget* createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+        void setEditorData(QWidget *editor, const QModelIndex &index) const override;
+        void setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const override;
+        QString displayText(const QVariant &value, const QLocale &locale) const override;
+        void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     
     protected:
-        bool editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index) Q_DECL_OVERRIDE;
+        bool editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index) override;
+        
+        // Connect the editor's "value changed by user" signal to commitData() so that the model is
+        // updated immediately instead of when the editor closes.
+        void connectLiveCommit(QWidget *editor) const;
     };
     
     /* --------------------------------------------------------------------------------
@@ -291,7 +307,7 @@ namespace QtPropertyEditor
         bool isDynamic() const { return _isDynamic; }
         void setIsDynamic(bool b);
         
-        QSize sizeHint() const Q_DECL_OVERRIDE { return getTableSize(this); }
+        QSize sizeHint() const override { return getTableSize(this); }
         
     public slots:
         void horizontalHeaderContextMenu(QPoint pos);
@@ -305,8 +321,8 @@ namespace QtPropertyEditor
         QtPropertyDelegate _delegate;
         bool _isDynamic = true;
         
-        void keyPressEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
-        bool eventFilter(QObject* o, QEvent* e) Q_DECL_OVERRIDE;
+        void keyPressEvent(QKeyEvent *event) override;
+        bool eventFilter(QObject* o, QEvent* e) override;
     };
     
 } // QtPropertyEditor
